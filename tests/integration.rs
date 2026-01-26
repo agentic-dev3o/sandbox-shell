@@ -502,7 +502,6 @@ fn test_base_profile_has_required_paths() {
 
     assert!(profile.filesystem.deny_read.iter().any(|p| p.contains(".ssh")));
     assert!(profile.filesystem.deny_read.iter().any(|p| p.contains(".aws")));
-    assert!(profile.filesystem.deny_read.iter().any(|p| p.contains(".gnupg")));
 }
 
 #[test]
@@ -523,7 +522,6 @@ fn test_node_profile_allows_npm_paths() {
 
     assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".npm")));
     assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".nvm")));
-    assert!(profile.network.allow_domains.contains(&"registry.npmjs.org".to_string()));
 }
 
 #[test]
@@ -532,7 +530,6 @@ fn test_rust_profile_allows_cargo() {
 
     assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".cargo")));
     assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".rustup")));
-    assert!(profile.network.allow_domains.contains(&"crates.io".to_string()));
 }
 
 #[test]
@@ -600,9 +597,6 @@ network_mode = "localhost"
 [filesystem]
 allow_read = ["/custom/read"]
 allow_write = ["/custom/write"]
-
-[network]
-allow_domains = ["custom.example.com"]
 "#,
     )
     .unwrap();

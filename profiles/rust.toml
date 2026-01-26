@@ -9,9 +9,3 @@ allow_read = [
 allow_write = [
     "~/.cargo/registry",
 ]
-
-[network]
-allow_domains = [
-    "crates.io",
-    "static.crates.io",
-]

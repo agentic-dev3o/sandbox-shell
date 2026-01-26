@@ -82,22 +82,6 @@ fn test_localhost_network_mode() {
 }
 
 #[test]
-fn test_allow_domain() {
-    let args = Args::try_parse_from(["sx", "--allow-domain", "github.com"]).unwrap();
-    assert_eq!(args.allow_domains, vec!["github.com"]);
-}
-
-#[test]
-fn test_multiple_allow_domains() {
-    let args = Args::try_parse_from([
-        "sx",
-        "--allow-domain", "github.com",
-        "--allow-domain", "npmjs.org",
-    ]).unwrap();
-    assert_eq!(args.allow_domains, vec!["github.com", "npmjs.org"]);
-}
-
-#[test]
 fn test_allow_read_path() {
     let args = Args::try_parse_from(["sx", "--allow-read", "/tmp/foo"]).unwrap();
     assert_eq!(args.allow_read, vec!["/tmp/foo"]);

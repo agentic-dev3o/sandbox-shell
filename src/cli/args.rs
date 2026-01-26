@@ -80,10 +80,6 @@ pub struct Args {
     #[arg(long, group = "network")]
     pub localhost: bool,
 
-    /// Allow specific domain (can repeat)
-    #[arg(long = "allow-domain", value_name = "DOMAIN")]
-    pub allow_domains: Vec<String>,
-
     /// Allow read access to path
     #[arg(long = "allow-read", value_name = "PATH")]
     pub allow_read: Vec<String>,

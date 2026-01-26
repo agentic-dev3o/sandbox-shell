@@ -1,17 +1,15 @@
-use super::schema::{Config, FilesystemConfig, NetworkConfig, ShellConfig, SandboxConfig};
+use super::schema::{Config, FilesystemConfig, ShellConfig, SandboxConfig};
 
 /// Merge two configurations, with project taking precedence
 ///
 /// - Network mode: project overrides global
 /// - Profiles: merged (both applied)
 /// - Filesystem paths: merged (allows union, denies union)
-/// - Domains: merged
 /// - Environment: merged
 pub fn merge_configs(global: &Config, project: &Config) -> Config {
     Config {
         sandbox: merge_sandbox(&global.sandbox, &project.sandbox),
         filesystem: merge_filesystem(&global.filesystem, &project.filesystem),
-        network: merge_network(&global.network, &project.network),
         shell: merge_shell(&global.shell, &project.shell),
         profiles: global.profiles.clone(), // Profile detection stays from global
     }
@@ -54,13 +52,6 @@ fn merge_filesystem(global: &FilesystemConfig, project: &FilesystemConfig) -> Fi
         allow_read: merge_unique_strings(&global.allow_read, &project.allow_read),
         deny_read: merge_unique_strings(&global.deny_read, &project.deny_read),
         allow_write: merge_unique_strings(&global.allow_write, &project.allow_write),
-    }
-}
-
-fn merge_network(global: &NetworkConfig, project: &NetworkConfig) -> NetworkConfig {
-    NetworkConfig {
-        allow_domains: merge_unique_strings(&global.allow_domains, &project.allow_domains),
-        deny_domains: merge_unique_strings(&global.deny_domains, &project.deny_domains),
     }
 }
 

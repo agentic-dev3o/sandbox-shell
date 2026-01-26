@@ -9,9 +9,3 @@ allow_read = [
 allow_write = [
     "~/go/pkg",
 ]
-
-[network]
-allow_domains = [
-    "proxy.golang.org",
-    "sum.golang.org",
-]

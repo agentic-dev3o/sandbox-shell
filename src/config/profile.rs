@@ -10,8 +10,6 @@ pub struct Profile {
     pub network_mode: Option<NetworkMode>,
     /// Filesystem configuration
     pub filesystem: ProfileFilesystem,
-    /// Network configuration
-    pub network: ProfileNetwork,
     /// Shell configuration
     pub shell: ProfileShell,
     /// Raw seatbelt rules (advanced)
@@ -26,14 +24,6 @@ pub struct ProfileFilesystem {
     pub allow_read: Vec<String>,
     pub deny_read: Vec<String>,
     pub allow_write: Vec<String>,
-}
-
-/// Profile network configuration
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ProfileNetwork {
-    pub allow_domains: Vec<String>,
-    pub deny_domains: Vec<String>,
 }
 
 /// Profile shell configuration
@@ -147,10 +137,6 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
         merge_unique(&mut result.filesystem.allow_read, &profile.filesystem.allow_read);
         merge_unique(&mut result.filesystem.deny_read, &profile.filesystem.deny_read);
         merge_unique(&mut result.filesystem.allow_write, &profile.filesystem.allow_write);
-
-        // Network: merge unique domains
-        merge_unique(&mut result.network.allow_domains, &profile.network.allow_domains);
-        merge_unique(&mut result.network.deny_domains, &profile.network.deny_domains);
 
         // Shell: merge unique env vars
         merge_unique(&mut result.shell.pass_env, &profile.shell.pass_env);

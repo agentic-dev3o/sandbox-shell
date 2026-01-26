@@ -50,10 +50,6 @@ allow_write = [
     "/var/run"
 ]
 
-[network]
-allow_domains = []
-deny_domains = []
-
 [shell]
 pass_env = [
     "TERM",

@@ -25,7 +25,6 @@ fn test_builtin_profile_localhost() {
 fn test_builtin_profile_node() {
     let profile = BuiltinProfile::Node.load();
     assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".npm")));
-    assert!(profile.network.allow_domains.iter().any(|d| d.contains("npmjs.org")));
 }
 
 #[test]
@@ -51,7 +50,6 @@ fn test_builtin_profile_go() {
 fn test_builtin_profile_claude() {
     let profile = BuiltinProfile::Claude.load();
     assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".claude")));
-    assert!(profile.network.allow_domains.iter().any(|d| d.contains("anthropic")));
 }
 
 #[test]
@@ -67,15 +65,11 @@ fn test_parse_profile_from_toml() {
 allow_read = ["~/.config/myapp"]
 allow_write = ["~/.cache/myapp"]
 
-[network]
-allow_domains = ["api.example.com"]
-
 [shell]
 pass_env = ["MY_API_KEY"]
 "#;
     let profile: Profile = toml::from_str(toml_str).unwrap();
     assert!(profile.filesystem.allow_read.contains(&"~/.config/myapp".to_string()));
-    assert!(profile.network.allow_domains.contains(&"api.example.com".to_string()));
 }
 
 #[test]
@@ -159,28 +153,6 @@ fn test_compose_profiles_network_mode_last_wins() {
 
     let composed = compose_profiles(&[offline, online]);
     assert_eq!(composed.network_mode, Some(NetworkMode::Online));
-}
-
-#[test]
-fn test_compose_profiles_merges_domains() {
-    let profile1 = Profile {
-        network: sx::config::profile::ProfileNetwork {
-            allow_domains: vec!["github.com".to_string()],
-            deny_domains: vec![],
-        },
-        ..Default::default()
-    };
-    let profile2 = Profile {
-        network: sx::config::profile::ProfileNetwork {
-            allow_domains: vec!["npmjs.org".to_string()],
-            deny_domains: vec![],
-        },
-        ..Default::default()
-    };
-
-    let composed = compose_profiles(&[profile1, profile2]);
-    assert!(composed.network.allow_domains.contains(&"github.com".to_string()));
-    assert!(composed.network.allow_domains.contains(&"npmjs.org".to_string()));
 }
 
 #[test]

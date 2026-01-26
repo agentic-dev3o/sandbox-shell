@@ -11,9 +11,3 @@ allow_read = [
 allow_write = [
     "~/.cache/pip",
 ]
-
-[network]
-allow_domains = [
-    "pypi.org",
-    "files.pythonhosted.org",
-]

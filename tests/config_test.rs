@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use sx::config::schema::{
-    Config, FilesystemConfig, NetworkConfig, NetworkMode, SandboxConfig, ShellConfig,
+    Config, FilesystemConfig, NetworkMode, SandboxConfig, ShellConfig,
 };
 use sx::config::global::load_global_config;
 use sx::config::project::load_project_config;
@@ -39,10 +39,6 @@ allow_read = ["~/.gitconfig", "~/.cargo"]
 deny_read = ["~/.ssh", "~/.aws"]
 allow_write = ["~/.npm/_cacache"]
 
-[network]
-allow_domains = ["github.com", "npmjs.org"]
-deny_domains = ["evil.com"]
-
 [shell]
 pass_env = ["TERM", "PATH"]
 deny_env = ["AWS_*", "GITHUB_TOKEN"]
@@ -53,7 +49,6 @@ deny_env = ["AWS_*", "GITHUB_TOKEN"]
     assert_eq!(config.sandbox.shell, Some("/bin/zsh".to_string()));
     assert!(config.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
     assert!(config.filesystem.deny_read.contains(&"~/.ssh".to_string()));
-    assert!(config.network.allow_domains.contains(&"github.com".to_string()));
     assert!(config.shell.pass_env.contains(&"TERM".to_string()));
 }
 
@@ -215,31 +210,6 @@ fn test_merge_configs_deny_takes_precedence() {
     // Deny lists are merged
     assert!(merged.filesystem.deny_read.contains(&"~/.ssh".to_string()));
     assert!(merged.filesystem.deny_read.contains(&"~/.cargo".to_string()));
-}
-
-#[test]
-fn test_merge_configs_network_domains() {
-    let global = Config {
-        network: NetworkConfig {
-            allow_domains: vec!["github.com".to_string()],
-            deny_domains: vec!["evil.com".to_string()],
-        },
-        ..Default::default()
-    };
-
-    let project = Config {
-        network: NetworkConfig {
-            allow_domains: vec!["npmjs.org".to_string()],
-            deny_domains: vec![],
-        },
-        ..Default::default()
-    };
-
-    let merged = merge_configs(&global, &project);
-
-    assert!(merged.network.allow_domains.contains(&"github.com".to_string()));
-    assert!(merged.network.allow_domains.contains(&"npmjs.org".to_string()));
-    assert!(merged.network.deny_domains.contains(&"evil.com".to_string()));
 }
 
 #[test]

@@ -8,7 +8,7 @@ pub use global::load_global_config;
 pub use merge::merge_configs;
 pub use profile::{
     compose_profiles, load_profile, load_profiles, BuiltinProfile, Profile, ProfileFilesystem,
-    ProfileNetwork, ProfileShell,
+    ProfileShell,
 };
 pub use project::load_project_config;
 pub use schema::{Config, NetworkMode};

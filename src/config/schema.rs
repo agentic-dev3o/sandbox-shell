@@ -20,7 +20,6 @@ pub enum NetworkMode {
 pub struct Config {
     pub sandbox: SandboxConfig,
     pub filesystem: FilesystemConfig,
-    pub network: NetworkConfig,
     pub shell: ShellConfig,
     pub profiles: ProfilesConfig,
 }
@@ -75,16 +74,6 @@ pub struct FilesystemConfig {
     pub deny_read: Vec<String>,
     /// Paths to always allow writing (beyond project dir)
     pub allow_write: Vec<String>,
-}
-
-/// Network access configuration
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct NetworkConfig {
-    /// Domains always allowed when online
-    pub allow_domains: Vec<String>,
-    /// Domains always blocked (even when online)
-    pub deny_domains: Vec<String>,
 }
 
 /// Shell environment configuration

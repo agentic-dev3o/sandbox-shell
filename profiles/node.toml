@@ -12,9 +12,3 @@ allow_read = [
 allow_write = [
     "~/.npm/_cacache",
 ]
-
-[network]
-allow_domains = [
-    "registry.npmjs.org",
-    "npmjs.org",
-]

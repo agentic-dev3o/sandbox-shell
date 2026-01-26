@@ -17,8 +17,5 @@ allow_write = [
     "/private/tmp/claude",
 ]
 
-[network]
-allow_domains = ["api.anthropic.com"]
-
 [shell]
 pass_env = ["ANTHROPIC_API_KEY"]

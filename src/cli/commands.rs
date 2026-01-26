@@ -359,10 +359,6 @@ allow_write = []
 # Paths to deny even if globally allowed
 deny_read = []
 
-[network]
-# Additional domains to allow for this project
-allow_domains = []
-
 [shell]
 # Additional environment variables to pass through
 pass_env = []
