@@ -3,10 +3,12 @@
 //! Streams sandbox denial logs from the system log in real-time,
 //! filtering for relevant violations to help debug sandbox issues.
 
-use std::io::{BufRead, BufReader};
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 /// Handle to a running trace session
@@ -16,10 +18,26 @@ pub struct TraceSession {
 }
 
 impl TraceSession {
-    /// Start a new trace session that streams sandbox violations
+    /// Start a new trace session that streams sandbox violations to stderr
     pub fn start() -> std::io::Result<Self> {
+        Self::start_with_output(None)
+    }
+
+    /// Start a new trace session that streams sandbox violations to a file
+    pub fn start_to_file(path: &Path) -> std::io::Result<Self> {
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)?;
+        Self::start_with_output(Some(file))
+    }
+
+    /// Start a trace session with optional file output
+    fn start_with_output(file: Option<File>) -> std::io::Result<Self> {
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
+        let file = file.map(|f| Arc::new(Mutex::new(f)));
 
         // Use macOS `log stream` to capture sandbox violations
         // Sandbox denials are logged by the kernel with sender "Sandbox"
@@ -47,7 +65,17 @@ impl TraceSession {
                     if let Ok(line) = line {
                         // Filter for denial messages and format output
                         if let Some(formatted) = format_violation(&line) {
-                            eprintln!("{}", formatted);
+                            if let Some(ref file) = file {
+                                // Write to file (strip ANSI codes for file output)
+                                if let Ok(mut f) = file.lock() {
+                                    let plain = strip_ansi_codes(&formatted);
+                                    let _ = writeln!(f, "{}", plain);
+                                    let _ = f.flush();
+                                }
+                            } else {
+                                // Write to stderr
+                                eprintln!("{}", formatted);
+                            }
                         }
                     }
                 }
@@ -134,6 +162,32 @@ fn format_violation(line: &str) -> Option<String> {
     None
 }
 
+/// Strip ANSI escape codes from a string for plain text output
+fn strip_ansi_codes(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip escape sequence
+            if chars.peek() == Some(&'[') {
+                chars.next(); // consume '['
+                // Skip until we hit a letter (end of ANSI sequence)
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,5 +233,19 @@ mod tests {
     fn test_format_violation_skips_non_deny() {
         let line = "2024-01-01 12:00:00.000 kernel: (Sandbox) some other message";
         assert!(format_violation(line).is_none());
+    }
+
+    #[test]
+    fn test_strip_ansi_codes() {
+        let input = "\x1b[90m[sx:trace]\x1b[0m \x1b[31m[NETWORK]\x1b[0m \x1b[1mnetwork-outbound\x1b[0m target";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "[sx:trace] [NETWORK] network-outbound target");
+    }
+
+    #[test]
+    fn test_strip_ansi_codes_no_codes() {
+        let input = "plain text without codes";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, input);
     }
 }

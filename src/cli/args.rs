@@ -44,6 +44,10 @@ pub struct Args {
     #[arg(short, long)]
     pub trace: bool,
 
+    /// Write trace output to file instead of stderr
+    #[arg(long, value_name = "PATH")]
+    pub trace_file: Option<PathBuf>,
+
     /// Print generated sandbox profile without executing
     #[arg(short = 'n', long)]
     pub dry_run: bool,

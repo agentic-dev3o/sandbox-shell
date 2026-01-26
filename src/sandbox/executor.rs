@@ -3,7 +3,7 @@ use crate::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams};
 use crate::sandbox::trace::TraceSession;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use tempfile::{NamedTempFile, TempDir};
 use uuid::Uuid;
@@ -32,7 +32,7 @@ pub fn execute_sandboxed(
     command: &[String],
     shell: Option<&str>,
 ) -> io::Result<ExecutionResult> {
-    execute_sandboxed_with_trace(params, command, shell, false)
+    execute_sandboxed_with_trace(params, command, shell, false, None)
 }
 
 /// Execute a command inside a sandbox with optional tracing
@@ -41,13 +41,22 @@ pub fn execute_sandboxed_with_trace(
     command: &[String],
     shell: Option<&str>,
     trace: bool,
+    trace_file: Option<&Path>,
 ) -> io::Result<ExecutionResult> {
     // Start trace session if requested
-    let mut trace_session = if trace {
-        eprintln!("\x1b[90m[sx:trace]\x1b[0m Starting sandbox violation trace...");
-        // Small delay to let log stream connect
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        TraceSession::start().ok()
+    let mut trace_session = if trace || trace_file.is_some() {
+        if let Some(path) = trace_file {
+            eprintln!(
+                "\x1b[90m[sx:trace]\x1b[0m Writing sandbox violations to {}",
+                path.display()
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            TraceSession::start_to_file(path).ok()
+        } else {
+            eprintln!("\x1b[90m[sx:trace]\x1b[0m Starting sandbox violation trace...");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            TraceSession::start().ok()
+        }
     } else {
         None
     };

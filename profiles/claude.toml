@@ -9,6 +9,7 @@ allow_read = [
     "~/.local/share/claude",
     "~/.local/bin/claude",
     "~/.CFUserTextEncoding",
+    "~/private/tmp/claude"
 ]
 allow_write = [
     "~/.claude",

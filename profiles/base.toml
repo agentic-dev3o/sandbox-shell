@@ -35,7 +35,6 @@ allow_read = [
 deny_read = [
     "~/.ssh",
     "~/.aws",
-    "~/.gnupg",
     "~/.config/gh",
     "~/.netrc",
     "~/.docker/config.json",

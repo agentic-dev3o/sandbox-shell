@@ -132,8 +132,14 @@ pub fn execute(args: &Args) -> Result<()> {
     let command: Vec<String> = args.command.clone().unwrap_or_default();
     let shell = context.config.sandbox.shell.as_deref();
 
-    let result = execute_sandboxed_with_trace(&context.params, &command, shell, args.trace)
-        .context("Failed to execute sandboxed command")?;
+    let result = execute_sandboxed_with_trace(
+        &context.params,
+        &command,
+        shell,
+        args.trace,
+        args.trace_file.as_deref(),
+    )
+    .context("Failed to execute sandboxed command")?;
 
     std::process::exit(result.exit_code);
 }

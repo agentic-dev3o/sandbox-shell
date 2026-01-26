@@ -1,6 +1,12 @@
-# GPG signing profile
+# GPG signing profile - allows agent communication for signing
+# Private keys in ~/.gnupg/private-keys-v1.d/ are encrypted; only gpg-agent can use them
 # Use with: sx gpg
 
 [filesystem]
-allow_read = ["~/.gnupg"]
-allow_write = ["~/.gnupg"]
+allow_read = [
+    "~/.gnupg/",
+]
+# Write access needed for lock files and socket communication
+allow_write = [
+    "~/.gnupg/",
+]
