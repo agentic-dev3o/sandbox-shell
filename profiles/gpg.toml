@@ -1,0 +1,6 @@
+# GPG signing profile
+# Use with: sx gpg
+
+[filesystem]
+allow_read = ["~/.gnupg"]
+allow_write = ["~/.gnupg"]

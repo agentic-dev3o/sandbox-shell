@@ -1,0 +1,13 @@
+/Users/pierozi/projects/dev3o/sandbox-shell/target/debug/deps/nix-8255d74545d4bd7b.d: /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/lib.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/macros.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/errno.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/fcntl.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/mod.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/signal.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/time.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/unistd.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/wait.rs
+
+/Users/pierozi/projects/dev3o/sandbox-shell/target/debug/deps/libnix-8255d74545d4bd7b.rmeta: /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/lib.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/macros.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/errno.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/fcntl.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/mod.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/signal.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/time.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/unistd.rs /Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/wait.rs
+
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/lib.rs:
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/macros.rs:
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/errno.rs:
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/fcntl.rs:
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/mod.rs:
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/signal.rs:
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/time.rs:
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/unistd.rs:
+/Users/pierozi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-0.28.0/src/sys/wait.rs:

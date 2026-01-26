@@ -1,0 +1,58 @@
+# Base sandbox profile - minimal security defaults
+# Always included unless explicitly excluded
+
+network_mode = "offline"
+
+[filesystem]
+allow_read = [
+    "/usr",
+    "/bin",
+    "/sbin",
+    "/opt",
+    "/Library",
+    "/System",
+    "/private/var/folders",
+    "/var/folders",
+    "/tmp",
+    "/dev",
+    "~/.gitconfig",
+    "~/.config/git",
+]
+deny_read = [
+    "~/.ssh",
+    "~/.aws",
+    "~/.gnupg",
+    "~/.config/gh",
+    "~/.netrc",
+    "~/.docker/config.json",
+    "~/Documents",
+    "~/Desktop",
+    "~/Downloads",
+]
+allow_write = [
+    "/tmp",
+    "/private/var/folders",
+    "/var/folders",
+]
+
+[network]
+allow_domains = []
+deny_domains = []
+
+[shell]
+pass_env = [
+    "TERM",
+    "COLORTERM",
+    "LANG",
+    "LC_ALL",
+    "HOME",
+    "USER",
+    "SHELL",
+    "PATH",
+]
+deny_env = [
+    "AWS_*",
+    "*_SECRET*",
+    "*_PASSWORD*",
+    "*_KEY",
+]

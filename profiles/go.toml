@@ -1,0 +1,17 @@
+# Go toolchain profile
+# Use with: sx go
+
+[filesystem]
+allow_read = [
+    "~/go",
+    "~/.config/go",
+]
+allow_write = [
+    "~/go/pkg",
+]
+
+[network]
+allow_domains = [
+    "proxy.golang.org",
+    "sum.golang.org",
+]

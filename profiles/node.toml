@@ -1,0 +1,20 @@
+# Node.js/npm toolchain profile
+# Use with: sx node
+
+[filesystem]
+allow_read = [
+    "~/.npm",
+    "~/.npmrc",
+    "~/.node-gyp",
+    "~/.nvm",
+    "~/.node_repl_history",
+]
+allow_write = [
+    "~/.npm/_cacache",
+]
+
+[network]
+allow_domains = [
+    "registry.npmjs.org",
+    "npmjs.org",
+]

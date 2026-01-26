@@ -1,0 +1,12 @@
+# Claude Code profile
+# Use with: sx claude
+
+[filesystem]
+allow_read = ["~/.claude"]
+allow_write = ["~/.claude"]
+
+[network]
+allow_domains = ["api.anthropic.com"]
+
+[shell]
+pass_env = ["ANTHROPIC_API_KEY"]

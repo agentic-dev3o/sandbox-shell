@@ -1,0 +1,4 @@
+# Localhost profile - allows localhost network only
+# Use with: sx localhost
+
+network_mode = "localhost"
