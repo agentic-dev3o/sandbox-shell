@@ -33,6 +33,8 @@ allow_write = [
     "/tmp",
     "/private/var/folders",
     "/var/folders",
+    "~/.zsh_history",
+    "~/.bash_history",
 ]
 
 [network]

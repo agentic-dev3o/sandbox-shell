@@ -80,7 +80,14 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
         profile.push_str("; Allowed write paths\n");
         for path in &params.allow_write {
             let p = path.display();
-            profile.push_str(&format!("(allow file-write* (subpath \"{p}\"))\n"));
+            // Use regex for files (to include lock files), subpath for directories
+            if path.is_file() {
+                // Escape special regex characters in path and allow file + any suffix (for .LOCK files)
+                let escaped = p.to_string().replace('.', "\\.");
+                profile.push_str(&format!("(allow file* (regex #\"^{escaped}.*\"))\n"));
+            } else {
+                profile.push_str(&format!("(allow file-write* (subpath \"{p}\"))\n"));
+            }
         }
         profile.push('\n');
     }

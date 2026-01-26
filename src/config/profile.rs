@@ -202,6 +202,8 @@ fn base_profile() -> Profile {
                 "/tmp".to_string(),
                 "/private/var/folders".to_string(),
                 "/var/folders".to_string(),
+                "~/.zsh_history".to_string(),
+                "~/.bash_history".to_string(),
             ],
         },
         network: ProfileNetwork::default(),
