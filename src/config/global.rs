@@ -4,8 +4,11 @@ use std::path::Path;
 use super::schema::Config;
 
 /// Default global config path
+///
+/// Uses ~/.config/sx/config.toml (XDG Base Directory standard) for consistency
+/// across platforms. This is the common convention for CLI tools.
 pub fn default_config_path() -> Option<std::path::PathBuf> {
-    dirs::config_dir().map(|p| p.join("sx").join("config.toml"))
+    dirs::home_dir().map(|p| p.join(".config").join("sx").join("config.toml"))
 }
 
 /// Load global configuration from file
