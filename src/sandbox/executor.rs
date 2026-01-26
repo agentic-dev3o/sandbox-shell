@@ -4,7 +4,7 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempDir};
 use uuid::Uuid;
 
 /// Exit codes for sandbox execution
@@ -43,7 +43,8 @@ pub fn execute_sandboxed(
     cmd.arg("-f").arg(profile_file.path());
 
     // If command is empty, spawn interactive shell
-    if command.is_empty() {
+    let is_interactive_shell = command.is_empty();
+    if is_interactive_shell {
         let shell_path = shell
             .map(String::from)
             .or_else(|| std::env::var("SHELL").ok())
@@ -53,6 +54,34 @@ pub fn execute_sandboxed(
         // Execute the provided command
         cmd.args(command);
     }
+
+    // Disable shell history for security (prevents secrets leaking into history files)
+    // We use ZDOTDIR for zsh to ensure history is disabled AFTER .zshrc runs
+    let _zdotdir: Option<TempDir> = if is_interactive_shell {
+        // Fish: disable history
+        cmd.env("fish_history", "");
+
+        // Bash: set env vars (bash respects these even if .bashrc sets HISTFILE)
+        cmd.env("HISTFILE", "/dev/null");
+        cmd.env("HISTSIZE", "0");
+        cmd.env("HISTFILESIZE", "0");
+
+        // Zsh: use ZDOTDIR to create a wrapper that disables history after sourcing user config
+        let zdotdir = TempDir::new().ok();
+        if let Some(ref dir) = zdotdir {
+            let zshrc_content = r#"# sx sandbox wrapper - sources user config then disables history
+[[ -f ~/.zshrc ]] && source ~/.zshrc
+HISTFILE=/dev/null
+HISTSIZE=0
+SAVEHIST=0
+"#;
+            let _ = fs::write(dir.path().join(".zshrc"), zshrc_content);
+            cmd.env("ZDOTDIR", dir.path());
+        }
+        zdotdir
+    } else {
+        None
+    };
 
     // Inherit stdio for interactive use
     cmd.stdin(Stdio::inherit())

@@ -47,15 +47,23 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     // System operations required for macOS to function
     profile.push_str("; System operations\n");
     profile.push_str("(allow sysctl-read)\n");
-    profile.push_str("(allow file-ioctl)\n\n");
+    profile.push_str("(allow file-ioctl)\n");
+    profile.push_str("(allow user-preference-read)\n\n");
 
     // Mach services required for system functionality
     profile.push_str("; Mach services\n");
-    profile.push_str("(allow mach-lookup)\n\n");
+    profile.push_str("(allow mach*)\n\n");
+
+    // IPC for Unix sockets (needed for DNS resolution via mDNSResponder)
+    profile.push_str("; IPC (Unix sockets)\n");
+    profile.push_str("(allow ipc-posix*)\n");
+    profile.push_str("(allow system-socket)\n\n");
 
     // Allowed read paths (deny-by-default model)
     // Root directory literal is required for path traversal
+    // file-read-metadata is needed globally for DNS resolution and path lookups
     profile.push_str("; Allowed read paths (deny-by-default)\n");
+    profile.push_str("(allow file-read-metadata)\n");
     profile.push_str("(allow file-read* (literal \"/\"))\n");
     for path in &params.allow_read {
         let p = path.display();
@@ -101,7 +109,9 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     // Device access (stdout, stderr, tty)
     profile.push_str("; Device access\n");
     profile.push_str("(allow file-write* (subpath \"/dev\"))\n");
-    profile.push_str("(allow file-read* (subpath \"/dev\"))\n\n");
+    profile.push_str("(allow file-read* (subpath \"/dev\"))\n");
+    // Pseudo-tty is required for interactive terminal features (backspace, arrow keys, etc.)
+    profile.push_str("(allow pseudo-tty)\n\n");
 
     // Network rules based on mode
     profile.push_str("; Network access\n");

@@ -82,19 +82,20 @@ impl BuiltinProfile {
         }
     }
 
-    /// Load the profile data
+    /// Load the profile data from embedded TOML files
     pub fn load(&self) -> Profile {
-        match self {
-            Self::Base => base_profile(),
-            Self::Online => online_profile(),
-            Self::Localhost => localhost_profile(),
-            Self::Node => node_profile(),
-            Self::Python => python_profile(),
-            Self::Rust => rust_profile(),
-            Self::Go => go_profile(),
-            Self::Claude => claude_profile(),
-            Self::Gpg => gpg_profile(),
-        }
+        let toml_str = match self {
+            Self::Base => include_str!("../../profiles/base.toml"),
+            Self::Online => include_str!("../../profiles/online.toml"),
+            Self::Localhost => include_str!("../../profiles/localhost.toml"),
+            Self::Node => include_str!("../../profiles/node.toml"),
+            Self::Python => include_str!("../../profiles/python.toml"),
+            Self::Rust => include_str!("../../profiles/rust.toml"),
+            Self::Go => include_str!("../../profiles/go.toml"),
+            Self::Claude => include_str!("../../profiles/claude.toml"),
+            Self::Gpg => include_str!("../../profiles/gpg.toml"),
+        };
+        toml::from_str(toml_str).expect("builtin profile TOML is invalid")
     }
 }
 
@@ -164,220 +165,5 @@ fn merge_unique(target: &mut Vec<String>, source: &[String]) {
         if !target.contains(item) {
             target.push(item.clone());
         }
-    }
-}
-
-// --- Built-in profile definitions ---
-
-fn base_profile() -> Profile {
-    Profile {
-        network_mode: Some(NetworkMode::Offline),
-        filesystem: ProfileFilesystem {
-            allow_read: vec![
-                "/usr".to_string(),
-                "/bin".to_string(),
-                "/sbin".to_string(),
-                "/opt".to_string(),
-                "/Library".to_string(),
-                "/System".to_string(),
-                "/private/var/folders".to_string(),
-                "/var/folders".to_string(),
-                "/tmp".to_string(),
-                "/dev".to_string(),
-                "~/.gitconfig".to_string(),
-                "~/.config/git".to_string(),
-            ],
-            deny_read: vec![
-                "~/.ssh".to_string(),
-                "~/.aws".to_string(),
-                "~/.gnupg".to_string(),
-                "~/.config/gh".to_string(),
-                "~/.netrc".to_string(),
-                "~/.docker/config.json".to_string(),
-                "~/Documents".to_string(),
-                "~/Desktop".to_string(),
-                "~/Downloads".to_string(),
-            ],
-            allow_write: vec![
-                "/tmp".to_string(),
-                "/private/var/folders".to_string(),
-                "/var/folders".to_string(),
-                "~/.zsh_history".to_string(),
-                "~/.bash_history".to_string(),
-            ],
-        },
-        network: ProfileNetwork::default(),
-        shell: ProfileShell {
-            pass_env: vec![
-                "TERM".to_string(),
-                "COLORTERM".to_string(),
-                "LANG".to_string(),
-                "LC_ALL".to_string(),
-                "HOME".to_string(),
-                "USER".to_string(),
-                "SHELL".to_string(),
-                "PATH".to_string(),
-            ],
-            deny_env: vec![
-                "AWS_*".to_string(),
-                "*_SECRET*".to_string(),
-                "*_PASSWORD*".to_string(),
-                "*_KEY".to_string(),
-            ],
-        },
-        seatbelt: None,
-    }
-}
-
-fn online_profile() -> Profile {
-    Profile {
-        network_mode: Some(NetworkMode::Online),
-        ..Default::default()
-    }
-}
-
-fn localhost_profile() -> Profile {
-    Profile {
-        network_mode: Some(NetworkMode::Localhost),
-        ..Default::default()
-    }
-}
-
-fn node_profile() -> Profile {
-    Profile {
-        filesystem: ProfileFilesystem {
-            allow_read: vec![
-                "~/.npm".to_string(),
-                "~/.npmrc".to_string(),
-                "~/.node-gyp".to_string(),
-                "~/.nvm".to_string(),
-                "~/.node_repl_history".to_string(),
-            ],
-            allow_write: vec![
-                "~/.npm/_cacache".to_string(),
-            ],
-            ..Default::default()
-        },
-        network: ProfileNetwork {
-            allow_domains: vec![
-                "registry.npmjs.org".to_string(),
-                "npmjs.org".to_string(),
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn python_profile() -> Profile {
-    Profile {
-        filesystem: ProfileFilesystem {
-            allow_read: vec![
-                "~/.pyenv".to_string(),
-                "~/.local/share/virtualenvs".to_string(),
-                "~/.python_history".to_string(),
-                "/Library/Frameworks/Python.framework".to_string(),
-            ],
-            allow_write: vec![
-                "~/.cache/pip".to_string(),
-            ],
-            ..Default::default()
-        },
-        network: ProfileNetwork {
-            allow_domains: vec![
-                "pypi.org".to_string(),
-                "files.pythonhosted.org".to_string(),
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn rust_profile() -> Profile {
-    Profile {
-        filesystem: ProfileFilesystem {
-            allow_read: vec![
-                "~/.cargo".to_string(),
-                "~/.rustup".to_string(),
-            ],
-            allow_write: vec![
-                "~/.cargo/registry".to_string(),
-            ],
-            ..Default::default()
-        },
-        network: ProfileNetwork {
-            allow_domains: vec![
-                "crates.io".to_string(),
-                "static.crates.io".to_string(),
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn go_profile() -> Profile {
-    Profile {
-        filesystem: ProfileFilesystem {
-            allow_read: vec![
-                "~/go".to_string(),
-                "~/.config/go".to_string(),
-            ],
-            allow_write: vec![
-                "~/go/pkg".to_string(),
-            ],
-            ..Default::default()
-        },
-        network: ProfileNetwork {
-            allow_domains: vec![
-                "proxy.golang.org".to_string(),
-                "sum.golang.org".to_string(),
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn claude_profile() -> Profile {
-    Profile {
-        filesystem: ProfileFilesystem {
-            allow_read: vec![
-                "~/.claude".to_string(),
-            ],
-            allow_write: vec![
-                "~/.claude".to_string(),
-            ],
-            ..Default::default()
-        },
-        network: ProfileNetwork {
-            allow_domains: vec![
-                "api.anthropic.com".to_string(),
-            ],
-            ..Default::default()
-        },
-        shell: ProfileShell {
-            pass_env: vec![
-                "ANTHROPIC_API_KEY".to_string(),
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn gpg_profile() -> Profile {
-    Profile {
-        filesystem: ProfileFilesystem {
-            allow_read: vec![
-                "~/.gnupg".to_string(),
-            ],
-            allow_write: vec![
-                "~/.gnupg".to_string(),
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
     }
 }

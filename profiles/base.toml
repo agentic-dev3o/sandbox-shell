@@ -9,14 +9,28 @@ allow_read = [
     "/bin",
     "/sbin",
     "/opt",
+    "/etc",
+    "/private/etc",
     "/Library",
     "/System",
+    "/private/var/db",
     "/private/var/folders",
+    "/private/var/run",
+    "/var/db",
     "/var/folders",
+    "/var/run",
     "/tmp",
     "/dev",
-    "~/.gitconfig",
-    "~/.config/git",
+    "~/.config/sx",
+    "~/Library",
+    # Shell config files (read-only)
+    "~/.zshrc",
+    "~/.zshenv",
+    "~/.zprofile",
+    "~/.bashrc",
+    "~/.bash_profile",
+    "~/.profile",
+    "~/.inputrc",
 ]
 deny_read = [
     "~/.ssh",
@@ -32,9 +46,9 @@ deny_read = [
 allow_write = [
     "/tmp",
     "/private/var/folders",
+    "/private/var/run",
     "/var/folders",
-    "~/.zsh_history",
-    "~/.bash_history",
+    "/var/run"
 ]
 
 [network]
