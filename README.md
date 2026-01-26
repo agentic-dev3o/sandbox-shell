@@ -122,6 +122,7 @@ Example configuration:
 inherit_global = true
 profiles = ["node"]
 # network = "localhost"
+# inherit_base = false  # Set to false for full custom control
 
 [filesystem]
 allow_read = []
@@ -138,6 +139,28 @@ pass_env = ["NODE_ENV", "DEBUG"]
 ### Global Configuration
 
 Create `~/.config/sx/config.toml` for system-wide defaults.
+
+### Full Custom Control
+
+Set `inherit_base = false` to skip the base profile and define your own paths from scratch:
+
+```toml
+[sandbox]
+inherit_base = false
+
+[filesystem]
+allow_read = [
+    "/usr",
+    "/bin",
+    "/Library",
+    "/System",
+    "/dev",
+    "~/Downloads",  # Now accessible!
+]
+allow_write = ["/dev"]
+```
+
+This gives you complete control over what paths are accessible, without any default restrictions.
 
 ## Security Model
 
@@ -163,11 +186,15 @@ The sandbox **blocks access** to sensitive paths by default:
 
 ### How It Works
 
-1. **Reads**: Allowed globally, specific sensitive paths denied
+1. **Reads**: Denied by default, only explicit system paths allowed (`/usr`, `/bin`, `/Library`, `/System`, etc.)
 2. **Writes**: Denied by default, allowed for working directory and temp
 3. **Network**: Controlled via Seatbelt network rules
 
-This model ensures programs can execute (read system libraries, binaries) while protecting credentials and restricting where data can be written or sent.
+This **deny-by-default** model ensures:
+- Programs can execute (allowed system paths include libraries and binaries)
+- Credentials are protected (`~/.ssh`, `~/.aws`, etc. are never in allow list)
+- Personal files are isolated (`~/pCloud`, `~/Dropbox`, etc. cannot be accessed)
+- Sensitive paths stay blocked even if parent is allowed (via `deny_read` override)
 
 ## Shell Integration
 

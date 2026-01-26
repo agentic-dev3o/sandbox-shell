@@ -41,6 +41,8 @@ pub struct SandboxConfig {
     pub log_file: Option<String>,
     /// Inherit from global config (project config only)
     pub inherit_global: bool,
+    /// Include base profile (set to false for full custom control)
+    pub inherit_base: bool,
     /// Profiles to use for this project (project config only)
     pub profiles: Vec<String>,
     /// Default network mode for this project (project config only)
@@ -56,6 +58,7 @@ impl Default for SandboxConfig {
             prompt_indicator: true,
             log_file: None,
             inherit_global: true,
+            inherit_base: true,
             profiles: Vec::new(),
             network: None,
         }

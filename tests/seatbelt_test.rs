@@ -84,16 +84,29 @@ fn test_network_localhost() {
 }
 
 #[test]
-fn test_global_read_access() {
-    // New security model: allow all reads globally, deny specific sensitive paths
+fn test_deny_by_default_reads() {
+    // Security model: deny-by-default, only explicit allow_read paths are accessible
     let params = SandboxParams {
         working_dir: PathBuf::from("/Users/test/project"),
         home_dir: PathBuf::from("/Users/test"),
+        allow_read: vec![PathBuf::from("/usr"), PathBuf::from("/bin")],
         ..Default::default()
     };
     let profile = generate_seatbelt_profile(&params);
-    assert!(profile.contains("(allow file-read-data)"), "Should allow global file-read-data");
-    assert!(profile.contains("(allow file-read-xattr)"), "Should allow global file-read-xattr");
+    // Should NOT have global read access
+    assert!(
+        !profile.contains(r#"(allow file-read* (subpath "/"))"#),
+        "Should NOT allow global file-read (deny-by-default)"
+    );
+    // Should have explicit allow_read paths
+    assert!(
+        profile.contains(r#"(allow file-read* (subpath "/usr"))"#),
+        "Should allow explicit /usr path"
+    );
+    assert!(
+        profile.contains(r#"(allow file-read* (subpath "/bin"))"#),
+        "Should allow explicit /bin path"
+    );
 }
 
 #[test]
@@ -154,33 +167,35 @@ fn test_base_profile_integration() {
     let base = BuiltinProfile::Base.load();
     let composed = compose_profiles(&[base]);
 
+    let expand_path = |p: &str| -> PathBuf {
+        if p.starts_with("~/") {
+            PathBuf::from("/Users/test").join(&p[2..])
+        } else {
+            PathBuf::from(p)
+        }
+    };
+
     let params = SandboxParams {
         working_dir: PathBuf::from("/Users/test/project"),
         home_dir: PathBuf::from("/Users/test"),
         network_mode: composed.network_mode.unwrap_or(NetworkMode::Offline),
+        allow_read: composed
+            .filesystem
+            .allow_read
+            .iter()
+            .map(|p| expand_path(p))
+            .collect(),
         deny_read: composed
             .filesystem
             .deny_read
             .iter()
-            .map(|p| {
-                if p.starts_with("~/") {
-                    PathBuf::from("/Users/test").join(&p[2..])
-                } else {
-                    PathBuf::from(p)
-                }
-            })
+            .map(|p| expand_path(p))
             .collect(),
         allow_write: composed
             .filesystem
             .allow_write
             .iter()
-            .map(|p| {
-                if p.starts_with("~/") {
-                    PathBuf::from("/Users/test").join(&p[2..])
-                } else {
-                    PathBuf::from(p)
-                }
-            })
+            .map(|p| expand_path(p))
             .collect(),
         ..Default::default()
     };
@@ -192,10 +207,15 @@ fn test_base_profile_integration() {
         profile.contains(".ssh"),
         "Base profile should reference .ssh in deny rules"
     );
-    // Security model: global read access with deny rules for sensitive paths
+    // Security model: deny-by-default with explicit allow paths
     assert!(
-        profile.contains("(allow file-read-data)"),
-        "Base profile should allow global file-read-data"
+        !profile.contains(r#"(allow file-read* (subpath "/"))"#),
+        "Base profile should NOT have global file-read (deny-by-default)"
+    );
+    // Should have explicit system paths allowed
+    assert!(
+        profile.contains(r#"(allow file-read* (subpath "/usr"))"#),
+        "Base profile should allow /usr"
     );
 }
 

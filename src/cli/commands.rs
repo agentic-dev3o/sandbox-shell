@@ -198,12 +198,14 @@ fn load_effective_config(args: &Args, working_dir: &PathBuf) -> Result<Config> {
 fn collect_profile_names(args: &Args, config: &Config, working_dir: &PathBuf) -> Vec<String> {
     let mut names = Vec::new();
 
-    // Always start with base
-    names.push("base".to_string());
+    // Start with base unless inherit_base is false
+    if config.sandbox.inherit_base {
+        names.push("base".to_string());
+    }
 
-    // Add default profiles from config
+    // Add default profiles from config (skip base if inherit_base is false)
     for p in &config.sandbox.default_profiles {
-        if !names.contains(p) {
+        if !names.contains(p) && (config.sandbox.inherit_base || p != "base") {
             names.push(p.clone());
         }
     }
@@ -380,6 +382,17 @@ mod tests {
 
         let names = collect_profile_names(&args, &config, &working_dir);
         assert!(names.contains(&"base".to_string()));
+    }
+
+    #[test]
+    fn test_collect_profile_names_excludes_base_when_inherit_base_false() {
+        let args = Args::try_parse_from(["sx"]).unwrap();
+        let mut config = Config::default();
+        config.sandbox.inherit_base = false;
+        let working_dir = PathBuf::from("/tmp");
+
+        let names = collect_profile_names(&args, &config, &working_dir);
+        assert!(!names.contains(&"base".to_string()));
     }
 
     #[test]

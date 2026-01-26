@@ -1,7 +1,7 @@
 //! Seatbelt profile generation for macOS sandbox
 //!
 //! Generates Apple Seatbelt profiles that enforce filesystem and network restrictions.
-//! Uses a "allow reads, deny sensitive paths, restrict writes" security model.
+//! Uses a deny-by-default security model where only explicitly allowed paths are accessible.
 
 use crate::config::schema::NetworkMode;
 use std::path::PathBuf;
@@ -15,9 +15,9 @@ pub struct SandboxParams {
     pub home_dir: PathBuf,
     /// Network mode (offline, online, localhost)
     pub network_mode: NetworkMode,
-    /// Additional paths to allow reading (beyond global read access)
+    /// Paths to allow reading (deny-by-default, only these paths are readable)
     pub allow_read: Vec<PathBuf>,
-    /// Paths to explicitly deny reading (overrides global allow)
+    /// Paths to explicitly deny reading (overrides allow_read, for sensitive subpaths)
     pub deny_read: Vec<PathBuf>,
     /// Paths to allow writing (restricted by default)
     pub allow_write: Vec<PathBuf>,
@@ -27,9 +27,9 @@ pub struct SandboxParams {
 
 /// Generate a Seatbelt profile from the given parameters
 ///
-/// Security model:
-/// - Reads: Allow globally, deny specific sensitive paths
-/// - Writes: Deny by default, allow working dir + explicit paths
+/// Security model (deny-by-default):
+/// - Reads: Denied by default, only explicit allow_read paths are accessible
+/// - Writes: Denied by default, allow working dir + explicit paths
 /// - Network: Configurable (offline/localhost/online)
 pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     let mut profile = String::new();
@@ -44,29 +44,35 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     profile.push_str("(allow process-exec)\n");
     profile.push_str("(allow signal)\n\n");
 
-    // Global read access (required for macOS to function)
-    // Security: reads without network access cannot exfiltrate data
-    profile.push_str("; Global read access\n");
-    profile.push_str("(allow file-read-data)\n");
-    profile.push_str("(allow file-read-xattr)\n");
-    profile.push_str("(allow file-read-metadata)\n");
+    // System operations required for macOS to function
+    profile.push_str("; System operations\n");
     profile.push_str("(allow sysctl-read)\n");
     profile.push_str("(allow file-ioctl)\n\n");
-
-    // Deny sensitive paths (overrides global read allow)
-    // These paths contain credentials and sensitive data
-    profile.push_str("; Denied read paths (sensitive data)\n");
-    for path in &params.deny_read {
-        let p = path.display();
-        profile.push_str(&format!("(deny file-read* (subpath \"{p}\"))\n"));
-    }
-    if !params.deny_read.is_empty() {
-        profile.push('\n');
-    }
 
     // Mach services required for system functionality
     profile.push_str("; Mach services\n");
     profile.push_str("(allow mach-lookup)\n\n");
+
+    // Allowed read paths (deny-by-default model)
+    // Root directory literal is required for path traversal
+    profile.push_str("; Allowed read paths (deny-by-default)\n");
+    profile.push_str("(allow file-read* (literal \"/\"))\n");
+    for path in &params.allow_read {
+        let p = path.display();
+        profile.push_str(&format!("(allow file-read* (subpath \"{p}\"))\n"));
+    }
+    profile.push('\n');
+
+    // Deny sensitive paths (overrides allow_read for nested sensitive paths)
+    // Uses last-match-wins: deny after allow takes precedence
+    if !params.deny_read.is_empty() {
+        profile.push_str("; Denied read paths (sensitive data)\n");
+        for path in &params.deny_read {
+            let p = path.display();
+            profile.push_str(&format!("(deny file-read* (subpath \"{p}\"))\n"));
+        }
+        profile.push('\n');
+    }
 
     // Working directory - full read/write access
     profile.push_str("; Working directory (full access)\n");
@@ -94,7 +100,8 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
 
     // Device access (stdout, stderr, tty)
     profile.push_str("; Device access\n");
-    profile.push_str("(allow file-write* (subpath \"/dev\"))\n\n");
+    profile.push_str("(allow file-write* (subpath \"/dev\"))\n");
+    profile.push_str("(allow file-read* (subpath \"/dev\"))\n\n");
 
     // Network rules based on mode
     profile.push_str("; Network access\n");
@@ -136,11 +143,22 @@ mod tests {
     }
 
     #[test]
-    fn test_profile_has_global_read() {
+    fn test_deny_by_default_no_global_read() {
         let params = SandboxParams::default();
         let profile = generate_seatbelt_profile(&params);
-        assert!(profile.contains("(allow file-read-data)"));
-        assert!(profile.contains("(allow file-read-xattr)"));
+        // Should NOT have global read access - deny by default
+        assert!(!profile.contains("(allow file-read* (subpath \"/\"))"));
+    }
+
+    #[test]
+    fn test_allow_read_paths_included() {
+        let params = SandboxParams {
+            allow_read: vec![PathBuf::from("/usr"), PathBuf::from("/bin")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params);
+        assert!(profile.contains("(allow file-read* (subpath \"/usr\"))"));
+        assert!(profile.contains("(allow file-read* (subpath \"/bin\"))"));
     }
 
     #[test]
@@ -151,6 +169,28 @@ mod tests {
         };
         let profile = generate_seatbelt_profile(&params);
         assert!(profile.contains("(deny file-read* (subpath \"/secret\"))"));
+    }
+
+    #[test]
+    fn test_deny_rules_come_after_allow_read() {
+        let params = SandboxParams {
+            allow_read: vec![PathBuf::from("/home")],
+            deny_read: vec![PathBuf::from("/home/.ssh")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params);
+
+        let deny_pos = profile
+            .find("(deny file-read* (subpath \"/home/.ssh\"))")
+            .expect("deny rule should exist");
+        let allow_pos = profile
+            .find("(allow file-read* (subpath \"/home\"))")
+            .expect("allow rule should exist");
+
+        assert!(
+            deny_pos > allow_pos,
+            "deny rules must come after allow rules for Seatbelt last-match-wins semantics"
+        );
     }
 
     #[test]

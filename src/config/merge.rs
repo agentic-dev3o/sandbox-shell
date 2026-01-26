@@ -18,11 +18,21 @@ pub fn merge_configs(global: &Config, project: &Config) -> Config {
 }
 
 fn merge_sandbox(global: &SandboxConfig, project: &SandboxConfig) -> SandboxConfig {
+    // Filter base from global profiles if inherit_base is false
+    let global_profiles = if project.inherit_base {
+        global.default_profiles.clone()
+    } else {
+        global.default_profiles.iter()
+            .filter(|p| *p != "base")
+            .cloned()
+            .collect()
+    };
+
     SandboxConfig {
         // Project network mode overrides global, or use project.network if set
         default_network: project.network.unwrap_or(project.default_network),
-        // Merge profiles
-        default_profiles: merge_unique_strings(&global.default_profiles, &project.default_profiles),
+        // Merge profiles (base filtered if inherit_base is false)
+        default_profiles: merge_unique_strings(&global_profiles, &project.default_profiles),
         // Project shell overrides global
         shell: project.shell.clone().or_else(|| global.shell.clone()),
         // Project prompt_indicator overrides global
@@ -31,7 +41,10 @@ fn merge_sandbox(global: &SandboxConfig, project: &SandboxConfig) -> SandboxConf
         log_file: project.log_file.clone().or_else(|| global.log_file.clone()),
         // Keep project settings
         inherit_global: project.inherit_global,
-        profiles: merge_unique_strings(&global.default_profiles, &project.profiles),
+        // Project inherit_base overrides global
+        inherit_base: project.inherit_base,
+        // Merge profiles (using pre-filtered global_profiles)
+        profiles: merge_unique_strings(&global_profiles, &project.profiles),
         network: project.network,
     }
 }
