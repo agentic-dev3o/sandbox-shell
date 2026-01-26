@@ -43,6 +43,7 @@ _sx() {
         '--version:Show version'
         '--verbose:Verbose output'
         '--debug:Debug mode'
+        '--trace:Trace sandbox violations'
         '--dry-run:Show profile without executing'
         '--explain:Show what would be allowed/denied'
         '--init:Initialize .sandbox.toml'
@@ -56,6 +57,7 @@ _sx() {
         '(-V --version)'{-V,--version}'[Show version]' \
         '(-v --verbose)'{-v,--verbose}'[Verbose output]' \
         '(-d --debug)'{-d,--debug}'[Debug mode]' \
+        '(-t --trace)'{-t,--trace}'[Trace violations]' \
         '(-n --dry-run)'{-n,--dry-run}'[Show profile]' \
         '--explain[Show permissions]' \
         '--init[Initialize config]' \

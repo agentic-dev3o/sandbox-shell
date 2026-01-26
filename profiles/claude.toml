@@ -1,9 +1,19 @@
 # Claude Code profile
 # Use with: sx claude
+network_mode = "online"
 
 [filesystem]
-allow_read = ["~/.claude"]
-allow_write = ["~/.claude"]
+allow_read = [
+    "~/.claude",
+    "~/.claude.json",
+    "~/.local/share/claude",
+    "~/.local/bin/claude",
+    "~/.CFUserTextEncoding",
+]
+allow_write = [
+    "~/.claude",
+    "~/.claude.json",
+]
 
 [network]
 allow_domains = ["api.anthropic.com"]

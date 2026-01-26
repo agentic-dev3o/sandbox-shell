@@ -1,5 +1,6 @@
 // sandbox-exec invocation
 use crate::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams};
+use crate::sandbox::trace::TraceSession;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -31,6 +32,26 @@ pub fn execute_sandboxed(
     command: &[String],
     shell: Option<&str>,
 ) -> io::Result<ExecutionResult> {
+    execute_sandboxed_with_trace(params, command, shell, false)
+}
+
+/// Execute a command inside a sandbox with optional tracing
+pub fn execute_sandboxed_with_trace(
+    params: &SandboxParams,
+    command: &[String],
+    shell: Option<&str>,
+    trace: bool,
+) -> io::Result<ExecutionResult> {
+    // Start trace session if requested
+    let mut trace_session = if trace {
+        eprintln!("\x1b[90m[sx:trace]\x1b[0m Starting sandbox violation trace...");
+        // Small delay to let log stream connect
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        TraceSession::start().ok()
+    } else {
+        None
+    };
+
     // Generate the seatbelt profile
     let profile_content = generate_seatbelt_profile(params);
 
@@ -41,6 +62,14 @@ pub fn execute_sandboxed(
     // Build sandbox-exec command
     let mut cmd = Command::new("/usr/bin/sandbox-exec");
     cmd.arg("-f").arg(profile_file.path());
+
+    // Set SANDBOX_MODE environment variable for shell prompt integration
+    let mode_str = match params.network_mode {
+        crate::config::schema::NetworkMode::Offline => "offline",
+        crate::config::schema::NetworkMode::Online => "online",
+        crate::config::schema::NetworkMode::Localhost => "localhost",
+    };
+    cmd.env("SANDBOX_MODE", mode_str);
 
     // If command is empty, spawn interactive shell
     let is_interactive_shell = command.is_empty();
@@ -90,6 +119,13 @@ SAVEHIST=0
 
     // Execute and wait
     let status = cmd.spawn()?.wait()?;
+
+    // Stop trace session
+    if let Some(ref mut session) = trace_session {
+        // Small delay to capture any final violations
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        session.stop();
+    }
 
     let exit_code = status.code().unwrap_or(exit_codes::GENERAL_ERROR);
 

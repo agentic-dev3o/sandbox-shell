@@ -9,6 +9,7 @@ A lightweight CLI that wraps shell sessions and commands in macOS Seatbelt sandb
 - **Profile System** - Pre-configured profiles for Node.js, Python, Rust, Go
 - **Auto-Detection** - Automatically applies relevant profiles based on project type
 - **Credential Protection** - Blocks access to SSH keys, AWS credentials, GPG keys by default
+- **Violation Tracing** - Debug blocked operations in real-time with `--trace`
 - **Shell Integration** - Prompt indicators and completions for Zsh, Bash, Fish
 
 ## Requirements
@@ -79,6 +80,7 @@ Arguments:
 
 Options:
   -v, --verbose      Show sandbox configuration
+  -t, --trace        Trace sandbox violations in real-time
   -n, --dry-run      Print sandbox profile without executing
       --explain      Show what would be allowed/denied
       --init         Create .sandbox.toml in current directory
@@ -256,6 +258,17 @@ sx localhost node -- npm run dev
 sx --explain online node
 sx --dry-run online node
 ```
+
+### Debug sandbox violations
+```bash
+# Trace blocked operations in real-time
+sx --trace -- npm install
+
+# Combine with profiles to debug specific restrictions
+sx --trace node -- npm run build
+```
+
+The `--trace` flag monitors sandbox violations as they occur, showing which paths or network operations are being blocked. This helps identify missing permissions when a command fails.
 
 ## Development
 

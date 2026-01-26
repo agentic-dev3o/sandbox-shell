@@ -40,6 +40,10 @@ pub struct Args {
     #[arg(short, long)]
     pub debug: bool,
 
+    /// Trace sandbox violations (shows blocked operations in real-time)
+    #[arg(short, long)]
+    pub trace: bool,
+
     /// Print generated sandbox profile without executing
     #[arg(short = 'n', long)]
     pub dry_run: bool,

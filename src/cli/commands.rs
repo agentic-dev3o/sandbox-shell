@@ -13,7 +13,7 @@ use crate::config::{
 };
 use crate::config::project::{load_project_config, PROJECT_CONFIG_NAME};
 use crate::detection::project_type::detect_project_types;
-use crate::sandbox::executor::execute_sandboxed;
+use crate::sandbox::executor::execute_sandboxed_with_trace;
 use crate::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams};
 use crate::utils::paths::expand_paths;
 
@@ -132,7 +132,7 @@ pub fn execute(args: &Args) -> Result<()> {
     let command: Vec<String> = args.command.clone().unwrap_or_default();
     let shell = context.config.sandbox.shell.as_deref();
 
-    let result = execute_sandboxed(&context.params, &command, shell)
+    let result = execute_sandboxed_with_trace(&context.params, &command, shell, args.trace)
         .context("Failed to execute sandboxed command")?;
 
     std::process::exit(result.exit_code);
