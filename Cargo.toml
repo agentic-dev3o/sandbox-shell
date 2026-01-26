@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Pierre Tomasina"]
 description = "Lightweight sandbox for macOS development"
 license = "MIT"
-repository = "https://github.com/pierozi/sx"
+repository = "https://github.com/agentic-dev3o/sandbox-shell"
 keywords = ["sandbox", "security", "macos", "seatbelt"]
 categories = ["command-line-utilities", "development-tools"]
 

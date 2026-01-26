@@ -84,16 +84,16 @@ fn test_network_localhost() {
 }
 
 #[test]
-fn test_allow_read_paths() {
+fn test_global_read_access() {
+    // New security model: allow all reads globally, deny specific sensitive paths
     let params = SandboxParams {
         working_dir: PathBuf::from("/Users/test/project"),
         home_dir: PathBuf::from("/Users/test"),
-        allow_read: vec![PathBuf::from("/usr"), PathBuf::from("/bin")],
         ..Default::default()
     };
     let profile = generate_seatbelt_profile(&params);
-    assert!(profile.contains(r#"(subpath "/usr")"#), "Should allow read /usr");
-    assert!(profile.contains(r#"(subpath "/bin")"#), "Should allow read /bin");
+    assert!(profile.contains("(allow file-read-data)"), "Should allow global file-read-data");
+    assert!(profile.contains("(allow file-read-xattr)"), "Should allow global file-read-xattr");
 }
 
 #[test]
@@ -158,18 +158,6 @@ fn test_base_profile_integration() {
         working_dir: PathBuf::from("/Users/test/project"),
         home_dir: PathBuf::from("/Users/test"),
         network_mode: composed.network_mode.unwrap_or(NetworkMode::Offline),
-        allow_read: composed
-            .filesystem
-            .allow_read
-            .iter()
-            .map(|p| {
-                if p.starts_with("~/") {
-                    PathBuf::from("/Users/test").join(&p[2..])
-                } else {
-                    PathBuf::from(p)
-                }
-            })
-            .collect(),
         deny_read: composed
             .filesystem
             .deny_read
@@ -204,10 +192,10 @@ fn test_base_profile_integration() {
         profile.contains(".ssh"),
         "Base profile should reference .ssh in deny rules"
     );
-    // Base profile should allow /usr for system binaries
+    // Security model: global read access with deny rules for sensitive paths
     assert!(
-        profile.contains(r#"(subpath "/usr")"#),
-        "Base profile should allow /usr"
+        profile.contains("(allow file-read-data)"),
+        "Base profile should allow global file-read-data"
     );
 }
 
