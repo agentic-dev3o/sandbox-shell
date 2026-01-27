@@ -30,7 +30,8 @@ The codebase follows a layered architecture with clear separation of concerns:
 
 ```
 src/
-├── lib.rs          # Entry point: parses args, dispatches to commands
+├── main.rs         # Binary entry point: calls sx::run()
+├── lib.rs          # Library entry point: parses args, dispatches to commands
 ├── cli/
 │   ├── args.rs     # Clap argument definitions
 │   └── commands.rs # Command implementations (init, explain, dry_run, execute)
@@ -42,11 +43,14 @@ src/
 │   └── merge.rs    # Config/profile merging logic
 ├── sandbox/
 │   ├── seatbelt.rs # Seatbelt profile generation (the core sandbox logic)
-│   └── executor.rs # sandbox-exec invocation
+│   ├── executor.rs # sandbox-exec invocation
+│   ├── trace.rs    # Real-time violation streaming via macOS `log stream`
+│   └── violations.rs # Violation parsing and log file handling
 ├── detection/
 │   └── project_type.rs  # Auto-detect project type from marker files
 ├── shell/
-│   └── integration.rs   # Shell prompt/completion support
+│   ├── integration.rs   # Shell prompt/completion support
+│   └── prompt.rs        # Prompt indicator formatting with ANSI colors
 └── utils/
     └── paths.rs    # Path expansion (~, environment variables)
 ```
