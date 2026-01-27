@@ -484,7 +484,7 @@ deny_env = ["SECRET_KEY", "AWS_*"]
 
 #[test]
 fn test_load_all_builtin_profiles() {
-    let builtin_names = ["base", "online", "localhost", "node", "python", "rust", "go", "claude", "gpg"];
+    let builtin_names = ["base", "online", "localhost", "rust", "claude", "gpg"];
 
     for name in builtin_names {
         let profiles = load_profiles(&[name.to_string()], None);
@@ -517,14 +517,6 @@ fn test_localhost_profile_sets_network_mode() {
 }
 
 #[test]
-fn test_node_profile_allows_npm_paths() {
-    let profile = BuiltinProfile::Node.load();
-
-    assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".npm")));
-    assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".nvm")));
-}
-
-#[test]
 fn test_rust_profile_allows_cargo() {
     let profile = BuiltinProfile::Rust.load();
 
@@ -536,7 +528,7 @@ fn test_rust_profile_allows_cargo() {
 fn test_compose_multiple_profiles() {
     let profiles = vec![
         BuiltinProfile::Base.load(),
-        BuiltinProfile::Node.load(),
+        BuiltinProfile::Rust.load(),
         BuiltinProfile::Online.load(),
     ];
 
@@ -544,7 +536,7 @@ fn test_compose_multiple_profiles() {
 
     assert_eq!(composed.network_mode, Some(NetworkMode::Online));
     assert!(composed.filesystem.allow_read.iter().any(|p| p.contains("/usr")));
-    assert!(composed.filesystem.allow_read.iter().any(|p| p.contains(".npm")));
+    assert!(composed.filesystem.allow_read.iter().any(|p| p.contains(".cargo")));
 }
 
 #[test]

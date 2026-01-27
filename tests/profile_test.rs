@@ -22,28 +22,10 @@ fn test_builtin_profile_localhost() {
 }
 
 #[test]
-fn test_builtin_profile_node() {
-    let profile = BuiltinProfile::Node.load();
-    assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".npm")));
-}
-
-#[test]
-fn test_builtin_profile_python() {
-    let profile = BuiltinProfile::Python.load();
-    assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".pyenv") || p.contains("python")));
-}
-
-#[test]
 fn test_builtin_profile_rust() {
     let profile = BuiltinProfile::Rust.load();
     assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".cargo")));
     assert!(profile.filesystem.allow_read.iter().any(|p| p.contains(".rustup")));
-}
-
-#[test]
-fn test_builtin_profile_go() {
-    let profile = BuiltinProfile::Go.load();
-    assert!(profile.filesystem.allow_read.iter().any(|p| p.contains("go")));
 }
 
 #[test]
@@ -130,14 +112,14 @@ fn test_compose_profiles_single() {
 #[test]
 fn test_compose_profiles_multiple() {
     let base = BuiltinProfile::Base.load();
-    let node = BuiltinProfile::Node.load();
+    let rust = BuiltinProfile::Rust.load();
 
-    let composed = compose_profiles(&[base, node]);
+    let composed = compose_profiles(&[base, rust]);
 
     // Should have base paths
     assert!(composed.filesystem.deny_read.iter().any(|p| p.contains(".ssh")));
-    // Should have node paths
-    assert!(composed.filesystem.allow_read.iter().any(|p| p.contains(".npm")));
+    // Should have rust paths
+    assert!(composed.filesystem.allow_read.iter().any(|p| p.contains(".cargo")));
 }
 
 #[test]
@@ -160,10 +142,7 @@ fn test_builtin_profile_from_name() {
     assert_eq!(BuiltinProfile::from_name("base"), Some(BuiltinProfile::Base));
     assert_eq!(BuiltinProfile::from_name("online"), Some(BuiltinProfile::Online));
     assert_eq!(BuiltinProfile::from_name("localhost"), Some(BuiltinProfile::Localhost));
-    assert_eq!(BuiltinProfile::from_name("node"), Some(BuiltinProfile::Node));
-    assert_eq!(BuiltinProfile::from_name("python"), Some(BuiltinProfile::Python));
     assert_eq!(BuiltinProfile::from_name("rust"), Some(BuiltinProfile::Rust));
-    assert_eq!(BuiltinProfile::from_name("go"), Some(BuiltinProfile::Go));
     assert_eq!(BuiltinProfile::from_name("claude"), Some(BuiltinProfile::Claude));
     assert_eq!(BuiltinProfile::from_name("gpg"), Some(BuiltinProfile::Gpg));
     assert_eq!(BuiltinProfile::from_name("unknown"), None);

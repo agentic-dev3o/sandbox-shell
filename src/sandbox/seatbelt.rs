@@ -6,6 +6,33 @@
 use crate::config::schema::NetworkMode;
 use std::path::PathBuf;
 
+/// Check if a path string contains glob wildcard characters
+fn contains_glob(path: &str) -> bool {
+    path.contains('*') || path.contains('?')
+}
+
+/// Convert a glob pattern to a Seatbelt regex pattern
+/// Escapes regex special characters and converts glob wildcards to regex equivalents
+fn glob_to_regex(pattern: &str) -> String {
+    let mut regex = String::with_capacity(pattern.len() * 2);
+    regex.push('^');
+
+    for c in pattern.chars() {
+        match c {
+            '*' => regex.push_str(".*"),
+            '?' => regex.push('.'),
+            // Escape regex special characters
+            '.' | '+' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '^' | '$' | '\\' => {
+                regex.push('\\');
+                regex.push(c);
+            }
+            _ => regex.push(c),
+        }
+    }
+
+    regex
+}
+
 /// Parameters for generating a Seatbelt sandbox profile
 #[derive(Debug, Clone, Default)]
 pub struct SandboxParams {
@@ -66,8 +93,13 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     profile.push_str("(allow file-read-metadata)\n");
     profile.push_str("(allow file-read* (literal \"/\"))\n");
     for path in &params.allow_read {
-        let p = path.display();
-        profile.push_str(&format!("(allow file-read* (subpath \"{p}\"))\n"));
+        let p = path.display().to_string();
+        if contains_glob(&p) {
+            let regex = glob_to_regex(&p);
+            profile.push_str(&format!("(allow file-read* (regex #\"{regex}\"))\n"));
+        } else {
+            profile.push_str(&format!("(allow file-read* (subpath \"{p}\"))\n"));
+        }
     }
     profile.push('\n');
 
@@ -76,8 +108,13 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     if !params.deny_read.is_empty() {
         profile.push_str("; Denied read paths (sensitive data)\n");
         for path in &params.deny_read {
-            let p = path.display();
-            profile.push_str(&format!("(deny file-read* (subpath \"{p}\"))\n"));
+            let p = path.display().to_string();
+            if contains_glob(&p) {
+                let regex = glob_to_regex(&p);
+                profile.push_str(&format!("(deny file-read* (regex #\"{regex}\"))\n"));
+            } else {
+                profile.push_str(&format!("(deny file-read* (subpath \"{p}\"))\n"));
+            }
         }
         profile.push('\n');
     }
@@ -93,11 +130,14 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     if !params.allow_write.is_empty() {
         profile.push_str("; Allowed write paths\n");
         for path in &params.allow_write {
-            let p = path.display();
-            // Use regex for files (to include lock files), subpath for directories
-            if path.is_file() {
-                // Escape special regex characters in path and allow file + any suffix (for .LOCK files)
-                let escaped = p.to_string().replace('.', "\\.");
+            let p = path.display().to_string();
+            if contains_glob(&p) {
+                // Glob patterns use regex filter
+                let regex = glob_to_regex(&p);
+                profile.push_str(&format!("(allow file-write* (regex #\"{regex}\"))\n"));
+            } else if path.is_file() {
+                // Use regex for files (to include lock files)
+                let escaped = p.replace('.', "\\.");
                 profile.push_str(&format!("(allow file* (regex #\"^{escaped}.*\"))\n"));
             } else {
                 profile.push_str(&format!("(allow file-write* (subpath \"{p}\"))\n"));
@@ -150,6 +190,145 @@ mod tests {
         let profile = generate_seatbelt_profile(&params);
         assert!(profile.contains("(version 1)"));
         assert!(profile.contains("(deny default)"));
+    }
+
+    // === Glob/Wildcard Detection Tests ===
+
+    #[test]
+    fn test_contains_glob_with_asterisk() {
+        assert!(contains_glob("/private/tmp/zsh*"));
+        assert!(contains_glob("/tmp/*.log"));
+        assert!(contains_glob("*"));
+    }
+
+    #[test]
+    fn test_contains_glob_with_question_mark() {
+        assert!(contains_glob("/tmp/file?.txt"));
+        assert!(contains_glob("?"));
+    }
+
+    #[test]
+    fn test_contains_glob_without_wildcards() {
+        assert!(!contains_glob("/private/tmp/zsh"));
+        assert!(!contains_glob("/usr/bin"));
+        assert!(!contains_glob("/home/user/.config"));
+    }
+
+    // === Glob to Regex Conversion Tests ===
+
+    #[test]
+    fn test_glob_to_regex_asterisk() {
+        // /private/tmp/zsh* should match /private/tmp/zshXXXXXX
+        let regex = glob_to_regex("/private/tmp/zsh*");
+        assert_eq!(regex, r"^/private/tmp/zsh.*");
+    }
+
+    #[test]
+    fn test_glob_to_regex_question_mark() {
+        let regex = glob_to_regex("/tmp/file?.txt");
+        assert_eq!(regex, r"^/tmp/file.\.txt");
+    }
+
+    #[test]
+    fn test_glob_to_regex_escapes_dots() {
+        let regex = glob_to_regex("/path/to/file.log");
+        assert_eq!(regex, r"^/path/to/file\.log");
+    }
+
+    #[test]
+    fn test_glob_to_regex_escapes_special_chars() {
+        let regex = glob_to_regex("/path/with(parens)/file");
+        assert_eq!(regex, r"^/path/with\(parens\)/file");
+    }
+
+    #[test]
+    fn test_glob_to_regex_complex_pattern() {
+        // /var/log/*.log should match /var/log/anything.log
+        let regex = glob_to_regex("/var/log/*.log");
+        assert_eq!(regex, r"^/var/log/.*\.log");
+    }
+
+    // === Seatbelt Profile Generation with Globs ===
+
+    #[test]
+    fn test_allow_read_glob_uses_regex() {
+        let params = SandboxParams {
+            allow_read: vec![PathBuf::from("/private/tmp/zsh*")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params);
+        // Should use regex filter, not subpath
+        assert!(
+            profile.contains(r#"(allow file-read* (regex #"^/private/tmp/zsh.*"))"#),
+            "Glob pattern should generate regex rule, got:\n{}",
+            profile
+        );
+        assert!(
+            !profile.contains(r#"(subpath "/private/tmp/zsh*")"#),
+            "Glob pattern should NOT use subpath filter"
+        );
+    }
+
+    #[test]
+    fn test_allow_read_non_glob_uses_subpath() {
+        let params = SandboxParams {
+            allow_read: vec![PathBuf::from("/private/tmp/claude")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params);
+        // Non-glob paths should still use subpath
+        assert!(
+            profile.contains(r#"(allow file-read* (subpath "/private/tmp/claude"))"#),
+            "Non-glob path should use subpath filter"
+        );
+    }
+
+    #[test]
+    fn test_allow_write_glob_uses_regex() {
+        let params = SandboxParams {
+            allow_write: vec![PathBuf::from("/private/tmp/zsh*")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params);
+        // Should use regex filter for write as well
+        assert!(
+            profile.contains(r#"(allow file-write* (regex #"^/private/tmp/zsh.*"))"#),
+            "Glob pattern should generate regex rule for writes, got:\n{}",
+            profile
+        );
+    }
+
+    #[test]
+    fn test_deny_read_glob_uses_regex() {
+        let params = SandboxParams {
+            deny_read: vec![PathBuf::from("/home/*/.ssh")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params);
+        // Dot in .ssh is escaped to match literal dot, not any character
+        assert!(
+            profile.contains(r#"(deny file-read* (regex #"^/home/.*/\.ssh"))"#),
+            "Glob pattern in deny should generate regex rule, got:\n{}",
+            profile
+        );
+    }
+
+    #[test]
+    fn test_mixed_glob_and_regular_paths() {
+        let params = SandboxParams {
+            allow_read: vec![
+                PathBuf::from("/usr"),
+                PathBuf::from("/private/tmp/zsh*"),
+                PathBuf::from("/bin"),
+            ],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params);
+        // Regular paths use subpath
+        assert!(profile.contains(r#"(allow file-read* (subpath "/usr"))"#));
+        assert!(profile.contains(r#"(allow file-read* (subpath "/bin"))"#));
+        // Glob path uses regex
+        assert!(profile.contains(r#"(allow file-read* (regex #"^/private/tmp/zsh.*"))"#));
     }
 
     #[test]
