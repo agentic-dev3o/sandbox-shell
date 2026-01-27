@@ -8,4 +8,8 @@ allow_read = [
 ]
 allow_write = [
     "~/.cargo/registry",
+    "~/.cargo/advisory-db",
+    "~/.cargo/advisory-db..lock",
+    "~/.cargo/git",
+    "~/.cargo/.package-cache",
 ]

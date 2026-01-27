@@ -6,7 +6,7 @@ A lightweight CLI that wraps shell sessions and commands in macOS Seatbelt sandb
 
 - **Filesystem Isolation** - Restrict read/write access to specific paths
 - **Network Control** - Block, allow, or limit network to localhost
-- **Profile System** - Pre-configured profiles for Node.js, Python, Rust, Go
+- **Profile System** - Pre-configured profiles for common toolchains (Rust, Claude, GPG)
 - **Auto-Detection** - Automatically applies relevant profiles based on project type
 - **Credential Protection** - Blocks access to SSH keys, AWS credentials, GPG keys by default
 - **Violation Tracing** - Debug blocked operations in real-time with `--trace`
@@ -61,12 +61,10 @@ sx online -- npm install
 sx localhost -- npm start
 
 # Use toolchain-specific profile
-sx node -- npm install
-sx python -- pip install requests
 sx rust -- cargo build
 
 # Combine profiles
-sx online node -- npm install
+sx online rust -- cargo build
 ```
 
 ## Usage
@@ -75,7 +73,7 @@ sx online node -- npm install
 sx [OPTIONS] [PROFILES]... [-- <COMMAND>...]
 
 Arguments:
-  [PROFILES]...  Profiles to apply (e.g., online, node, claude)
+  [PROFILES]...  Profiles to apply (e.g., online, rust, claude)
   [COMMAND]...   Command to run in sandbox (after --)
 
 Options:
@@ -100,10 +98,7 @@ Options:
 | `base` | Minimal sandbox, always included |
 | `online` | Full network access |
 | `localhost` | Localhost-only network |
-| `node` | Node.js/npm (allows npm registry) |
-| `python` | Python/pip (allows PyPI) |
 | `rust` | Rust/Cargo (allows crates.io) |
-| `go` | Go modules (allows proxy.golang.org) |
 | `claude` | Claude Code support |
 | `gpg` | GPG signing support |
 
@@ -122,7 +117,7 @@ Example configuration:
 ```toml
 [sandbox]
 inherit_global = true
-profiles = ["node"]
+profiles = ["rust"]
 # network = "localhost"
 # inherit_base = false  # Set to false for full custom control
 
@@ -226,17 +221,17 @@ cp shell/sx.fish ~/.config/fish/conf.d/
 ### Features
 - Prompt indicator showing sandbox mode (offline/online/localhost)
 - Tab completion for profiles and options
-- Aliases: `sxo` (online), `sxl` (localhost), `sxn` (node), etc.
+- Aliases: `sxo` (online), `sxl` (localhost), `sxr` (rust), etc.
 
 ## Examples
 
-### Safe npm install
+### Safe cargo build
 ```bash
-# Offline - package must be cached or bundled
-sx -- npm install
+# Offline - dependencies must be cached
+sx -- cargo build
 
-# Online - allows npm registry
-sx online node -- npm install
+# Online - allows crates.io
+sx online rust -- cargo build
 ```
 
 ### Run untrusted code
@@ -250,22 +245,22 @@ sx -- ./build.sh
 ### Development server
 ```bash
 # Allow localhost for dev server, block external network
-sx localhost node -- npm run dev
+sx localhost -- npm run dev
 ```
 
 ### Check what would be allowed
 ```bash
-sx --explain online node
-sx --dry-run online node
+sx --explain online rust
+sx --dry-run online rust
 ```
 
 ### Debug sandbox violations
 ```bash
 # Trace blocked operations in real-time
-sx --trace -- npm install
+sx --trace -- cargo build
 
 # Combine with profiles to debug specific restrictions
-sx --trace node -- npm run build
+sx --trace rust -- cargo build
 ```
 
 The `--trace` flag monitors sandbox violations as they occur, showing which paths or network operations are being blocked. This helps identify missing permissions when a command fails.

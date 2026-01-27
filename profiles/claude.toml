@@ -14,6 +14,7 @@ allow_read = [
 allow_write = [
     "~/.claude",
     "~/.claude.json",
+    "~/Library/Caches/claude-cli-nodejs/",
     "/private/tmp/claude",
 ]
 
