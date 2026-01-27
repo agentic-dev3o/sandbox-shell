@@ -10,12 +10,14 @@ allow_read = [
     "~/.local/bin/claude",
     "~/.CFUserTextEncoding",
     "/private/tmp/claude",
+    "/private/tmp/zsh*", # When claude use zsh in bash it create dynamic tmp file
 ]
 allow_write = [
     "~/.claude",
     "~/.claude.json",
     "~/Library/Caches/claude-cli-nodejs/",
     "/private/tmp/claude",
+    "/private/tmp/zsh*", # When claude use zsh in bash it create dynamic tmp file
 ]
 
 [shell]
