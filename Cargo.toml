@@ -29,7 +29,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 nix = { version = "0.28", features = ["process", "signal"] }
 
 # Utilities
-thiserror = "1"
+thiserror = "2"
 anyhow = "1"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
