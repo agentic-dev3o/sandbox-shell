@@ -1,0 +1,4 @@
+# Online profile - allows full network access
+# Use with: sx online
+
+network_mode = "online"

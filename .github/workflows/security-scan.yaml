@@ -1,0 +1,116 @@
+name: Security Scan
+
+on:
+  schedule:
+    # Run every Monday at 09:00 UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # SCA: Check for new CVEs in dependencies
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run security audit
+        id: audit
+        run: |
+          cargo audit --json > audit-results.json 2>&1 || true
+          cargo audit --deny warnings
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cargo-audit-results
+          path: audit-results.json
+          retention-days: 30
+
+  # Check for outdated dependencies
+  dependency-freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated --locked
+
+      - name: Check outdated dependencies
+        run: cargo outdated --root-deps-only
+
+  # License and supply chain compliance
+  supply-chain-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check licenses and advisories
+        run: cargo deny check
+
+  # Secrets scanning across full history
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks (full history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Create issue on vulnerability detection
+  notify-on-findings:
+    runs-on: ubuntu-latest
+    needs: [dependency-audit]
+    if: failure()
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create issue for vulnerabilities
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const title = '🤖 Dependency vulnerabilities detected';
+            const body = `## Weekly Security Scan Alert
+
+            The scheduled security scan has detected potential vulnerabilities in project dependencies.
+
+            **Action Required:**
+            1. Review the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            2. Run \`cargo audit\` locally for details
+            3. Update affected dependencies or apply mitigations
+
+            **Scan Date:** ${new Date().toISOString().split('T')[0]}
+            `;
+
+            // Check for existing open issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security'
+            });
+
+            const existingIssue = issues.data.find(i => i.title === title);
+
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['security', 'dependencies']
+              });
+            }

@@ -1,0 +1,24 @@
+# Claude Code profile
+# Use with: sx claude
+network_mode = "online"
+
+[filesystem]
+allow_read = [
+    "~/.claude",
+    "~/.claude.json",
+    "~/.local/share/claude",
+    "~/.local/bin/claude",
+    "~/.CFUserTextEncoding",
+    "/private/tmp/claude",
+    "/private/tmp/zsh*", # When claude use zsh in bash it create dynamic tmp file
+]
+allow_write = [
+    "~/.claude",
+    "~/.claude.json",
+    "~/Library/Caches/claude-cli-nodejs/",
+    "/private/tmp/claude",
+    "/private/tmp/zsh*", # When claude use zsh in bash it create dynamic tmp file
+]
+
+[shell]
+pass_env = ["ANTHROPIC_API_KEY"]

@@ -1,0 +1,15 @@
+# Rust/Cargo toolchain profile
+# Use with: sx rust
+
+[filesystem]
+allow_read = [
+    "~/.cargo",
+    "~/.rustup",
+]
+allow_write = [
+    "~/.cargo/registry",
+    "~/.cargo/advisory-db",
+    "~/.cargo/advisory-db..lock",
+    "~/.cargo/git",
+    "~/.cargo/.package-cache",
+]
