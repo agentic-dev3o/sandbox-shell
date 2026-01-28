@@ -38,7 +38,7 @@ jobs:
     needs: validate
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -50,6 +50,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-security-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-security-
 
       - name: Install security tools
         run: |
@@ -68,7 +70,7 @@ jobs:
     needs: [validate, security]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -116,13 +118,14 @@ jobs:
     runs-on: macos-latest
     needs: [validate, prepare]
     strategy:
+      fail-fast: false
       matrix:
         target:
           - x86_64-apple-darwin
           - aarch64-apple-darwin
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: v${{ needs.validate.outputs.version }}
 
@@ -139,6 +142,8 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
 
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
@@ -164,7 +169,7 @@ jobs:
     needs: [validate, build]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: v${{ needs.validate.outputs.version }}
 

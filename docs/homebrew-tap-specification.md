@@ -55,7 +55,7 @@ brew upgrade sx
 │ sx repository                  │
 │ (main application)             │
 │                                │
-│ .github/workflows/release.yml  │
+│ .github/workflows/release.yaml  │
 │   ├── Bumps version            │
 │   ├── Creates GitHub release   │
 │   ├── Calculates SHA256        │
