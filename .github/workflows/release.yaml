@@ -102,8 +102,8 @@ jobs:
 
       - name: Install security tools
         run: |
-          cargo install cargo-audit --locked
-          cargo install cargo-deny --locked
+          command -v cargo-audit || cargo install cargo-audit --locked
+          command -v cargo-deny || cargo install cargo-deny --locked
 
       - name: Run cargo audit
         run: cargo audit --deny warnings
@@ -137,9 +137,9 @@ jobs:
       - name: Install release tools
         run: |
           # Install cargo-edit for version bumping
-          cargo install cargo-edit --locked
+          command -v cargo-set-version || cargo install cargo-edit --locked
           # Install git-cliff for changelog generation
-          cargo install git-cliff --locked
+          command -v git-cliff || cargo install git-cliff --locked
 
       - name: Bump version in Cargo.toml
         run: |
