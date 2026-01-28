@@ -15,13 +15,9 @@ pub use crate::config::schema::NetworkMode;
     base        Minimal sandbox (always included)\n    \
     online      Full network access\n    \
     localhost   Localhost network only\n    \
-    node        Node.js/npm toolchain\n    \
-    python      Python toolchain\n    \
     rust        Rust/Cargo toolchain\n    \
-    go          Go toolchain\n    \
     claude      Claude Code (~/.claude access)\n    \
-    gpg         GPG signing support\n    \
-    git         Git with signing support")]
+    gpg         GPG signing support")]
 pub struct Args {
     /// Enable verbose output (show sandbox config)
     #[arg(short, long)]
@@ -86,7 +82,7 @@ pub struct Args {
     #[arg(long = "deny-read", value_name = "PATH")]
     pub deny_read: Vec<String>,
 
-    /// Profiles to apply (e.g., online, node, claude)
+    /// Profiles to apply (e.g., online, rust, claude)
     #[arg(value_name = "PROFILES")]
     pub profiles: Vec<String>,
 

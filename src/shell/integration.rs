@@ -71,13 +71,9 @@ _sx() {
         'base:Minimal sandbox (always included)'
         'online:Full network access'
         'localhost:Localhost network only'
-        'node:Node.js/npm toolchain'
-        'python:Python toolchain'
         'rust:Rust/Cargo toolchain'
-        'go:Go toolchain'
         'claude:Claude Code support'
         'gpg:GPG signing support'
-        'git:Git with signing'
     )
 
     local -a options
@@ -114,8 +110,6 @@ compdef _sx sx
 # Aliases for common patterns
 alias sxo='sx online'
 alias sxl='sx localhost'
-alias sxn='sx online node'
-alias sxp='sx online python'
 alias sxr='sx online rust'
 alias sxc='sx online claude'
 "#;
@@ -148,7 +142,7 @@ fi
 # Completions
 _sx_completions() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
-    local profiles="base online localhost node python rust go claude gpg git"
+    local profiles="base online localhost rust claude gpg"
     local options="--help --version --verbose --debug --dry-run --explain --init --offline --online --localhost"
 
     if [[ "$cur" == -* ]]; then
@@ -163,8 +157,6 @@ complete -F _sx_completions sx
 # Aliases
 alias sxo='sx online'
 alias sxl='sx localhost'
-alias sxn='sx online node'
-alias sxp='sx online python'
 alias sxr='sx online rust'
 alias sxc='sx online claude'
 "#;
@@ -215,19 +207,13 @@ complete -c sx -l localhost -d 'Allow localhost only'
 complete -c sx -a 'base' -d 'Minimal sandbox'
 complete -c sx -a 'online' -d 'Full network access'
 complete -c sx -a 'localhost' -d 'Localhost network only'
-complete -c sx -a 'node' -d 'Node.js/npm toolchain'
-complete -c sx -a 'python' -d 'Python toolchain'
 complete -c sx -a 'rust' -d 'Rust/Cargo toolchain'
-complete -c sx -a 'go' -d 'Go toolchain'
 complete -c sx -a 'claude' -d 'Claude Code support'
 complete -c sx -a 'gpg' -d 'GPG signing support'
-complete -c sx -a 'git' -d 'Git with signing'
 
 # Aliases
 alias sxo 'sx online'
 alias sxl 'sx localhost'
-alias sxn 'sx online node'
-alias sxp 'sx online python'
 alias sxr 'sx online rust'
 alias sxc 'sx online claude'
 "#;

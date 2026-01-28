@@ -702,11 +702,17 @@ allow_write = ["/custom/write"]
 }
 
 #[test]
-fn test_load_missing_profile_returns_empty() {
+fn test_load_missing_profile_falls_back_to_online() {
     let profiles = load_profiles(&["nonexistent".to_string()], None);
-    assert!(
-        profiles.is_empty(),
-        "Should return empty for missing profile"
+    assert_eq!(
+        profiles.len(),
+        1,
+        "Should return one profile (online fallback) for missing profile"
+    );
+    // Verify it's the online profile (has network_mode = Some(Online))
+    assert_eq!(
+        profiles[0].network_mode,
+        Some(sx::config::schema::NetworkMode::Online)
     );
 }
 

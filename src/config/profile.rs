@@ -215,8 +215,21 @@ pub fn load_profiles(names: &[String], custom_dir: Option<&Path>) -> Vec<Profile
                 }
             }
 
-            // Profile not found - this is not an error, it might be an unknown name
-            None
+            // Profile not found - warn and fallback to online
+            eprintln!(
+                "\x1b[33m[sx:warn]\x1b[0m Unknown profile '{}', falling back to 'online'",
+                name
+            );
+            match BuiltinProfile::Online.load() {
+                Ok(profile) => Some(profile),
+                Err(e) => {
+                    eprintln!(
+                        "\x1b[31m[sx:error]\x1b[0m Failed to load fallback 'online' profile: {}",
+                        e
+                    );
+                    None
+                }
+            }
         })
         .collect()
 }
