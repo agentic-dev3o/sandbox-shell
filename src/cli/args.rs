@@ -40,11 +40,14 @@ pub struct Args {
     #[arg(short, long)]
     pub debug: bool,
 
-    /// Trace sandbox violations (shows blocked operations in real-time)
+    /// Trace sandbox violations (shows blocked operations in real-time).
+    /// Note: Shows violations from ALL sandboxed processes on the system,
+    /// not just this session (macOS limitation)
     #[arg(short, long)]
     pub trace: bool,
 
-    /// Write trace output to file instead of stderr
+    /// Write trace output to file instead of stderr.
+    /// Note: Shows violations from ALL sandboxed processes on the system
     #[arg(long, value_name = "PATH")]
     pub trace_file: Option<PathBuf>,
 

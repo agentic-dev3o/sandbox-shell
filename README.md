@@ -130,12 +130,15 @@ sx --dry-run rust           # Preview sandbox profile
 | Option | Description |
 |--------|-------------|
 | `-v, --verbose` | Show sandbox configuration |
-| `-t, --trace` | Trace sandbox violations in real-time |
+| `-t, --trace` | Trace sandbox violations in real-time (see note below) |
+| `--trace-file <PATH>` | Write trace output to file instead of stderr |
 | `-n, --dry-run` | Print sandbox profile without executing |
 | `--explain` | Show what would be allowed/denied |
 | `--init` | Create `.sandbox.toml` in current directory |
 | `--allow-read <PATH>` | Allow read access to path |
 | `--allow-write <PATH>` | Allow write access to path |
+
+> **Note on `--trace`:** The trace output shows sandbox violations from **all sandboxed processes** on the system, not just the current session. This is a limitation of macOS sandbox logging, which doesn't include session identifiers in denial logs. If you're running multiple `sx` sessions simultaneously, violations from all sessions will appear in each trace output.
 
 ## Profiles
 
