@@ -157,7 +157,7 @@ jobs:
           git add Cargo.toml Cargo.lock CHANGELOG.md
           git commit -m "chore(release): v${{ needs.validate.outputs.version }}"
           git tag -a "v${{ needs.validate.outputs.version }}" -m "Release v${{ needs.validate.outputs.version }}"
-          git push origin main
+          git push origin feature/release-workflow
           git push origin "v${{ needs.validate.outputs.version }}"
 
   # Build release binaries for macOS (Intel and Apple Silicon)
