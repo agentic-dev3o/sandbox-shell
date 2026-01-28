@@ -13,8 +13,7 @@ body = """
     ### {{ group | striptags | trim | upper_first }}
     {% for commit in commits %}
         - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
-            {{ commit.message | upper_first }}\
-            {% if commit.github.username %} by @{{ commit.github.username }}{%- endif %}\
+            {{ commit.message | upper_first }}
     {% endfor %}
 {% endfor %}\n
 """
