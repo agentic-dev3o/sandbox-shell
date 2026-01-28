@@ -1,17 +1,8 @@
 use clap::Parser;
 use std::path::PathBuf;
 
-/// Network access mode for the sandbox
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NetworkMode {
-    /// Block all network access (default)
-    #[default]
-    Offline,
-    /// Allow all network access
-    Online,
-    /// Allow localhost only
-    Localhost,
-}
+// Re-export NetworkMode from config schema to avoid duplication
+pub use crate::config::schema::NetworkMode;
 
 /// sx - Lightweight sandbox for macOS development
 ///

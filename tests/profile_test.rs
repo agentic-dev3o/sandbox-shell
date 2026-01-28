@@ -4,7 +4,7 @@ use tempfile::TempDir;
 
 #[test]
 fn test_builtin_profile_base() {
-    let profile = BuiltinProfile::Base.load();
+    let profile = BuiltinProfile::Base.load().unwrap();
     assert!(profile
         .filesystem
         .allow_read
@@ -19,19 +19,19 @@ fn test_builtin_profile_base() {
 
 #[test]
 fn test_builtin_profile_online() {
-    let profile = BuiltinProfile::Online.load();
+    let profile = BuiltinProfile::Online.load().unwrap();
     assert_eq!(profile.network_mode, Some(NetworkMode::Online));
 }
 
 #[test]
 fn test_builtin_profile_localhost() {
-    let profile = BuiltinProfile::Localhost.load();
+    let profile = BuiltinProfile::Localhost.load().unwrap();
     assert_eq!(profile.network_mode, Some(NetworkMode::Localhost));
 }
 
 #[test]
 fn test_builtin_profile_rust() {
-    let profile = BuiltinProfile::Rust.load();
+    let profile = BuiltinProfile::Rust.load().unwrap();
     assert!(profile
         .filesystem
         .allow_read
@@ -46,7 +46,7 @@ fn test_builtin_profile_rust() {
 
 #[test]
 fn test_builtin_profile_claude() {
-    let profile = BuiltinProfile::Claude.load();
+    let profile = BuiltinProfile::Claude.load().unwrap();
     assert!(profile
         .filesystem
         .allow_read
@@ -56,7 +56,7 @@ fn test_builtin_profile_claude() {
 
 #[test]
 fn test_builtin_profile_gpg() {
-    let profile = BuiltinProfile::Gpg.load();
+    let profile = BuiltinProfile::Gpg.load().unwrap();
     assert!(profile
         .filesystem
         .allow_read
@@ -145,7 +145,7 @@ fn test_compose_profiles_empty() {
 
 #[test]
 fn test_compose_profiles_single() {
-    let profile = BuiltinProfile::Base.load();
+    let profile = BuiltinProfile::Base.load().unwrap();
     let composed = compose_profiles(&[profile.clone()]);
     assert_eq!(
         composed.filesystem.allow_read,
@@ -155,8 +155,8 @@ fn test_compose_profiles_single() {
 
 #[test]
 fn test_compose_profiles_multiple() {
-    let base = BuiltinProfile::Base.load();
-    let rust = BuiltinProfile::Rust.load();
+    let base = BuiltinProfile::Base.load().unwrap();
+    let rust = BuiltinProfile::Rust.load().unwrap();
 
     let composed = compose_profiles(&[base, rust]);
 

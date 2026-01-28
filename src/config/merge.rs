@@ -1,4 +1,5 @@
 use super::schema::{Config, FilesystemConfig, SandboxConfig, ShellConfig};
+use std::collections::HashSet;
 
 /// Merge two configurations, with project taking precedence
 ///
@@ -68,11 +69,13 @@ fn merge_shell(global: &ShellConfig, project: &ShellConfig) -> ShellConfig {
     }
 }
 
-/// Merge two string vectors, keeping unique values
+/// Merge two string vectors, keeping unique values.
+/// Uses HashSet for O(1) lookups instead of O(n) contains() checks.
 fn merge_unique_strings(a: &[String], b: &[String]) -> Vec<String> {
+    let mut seen: HashSet<&str> = a.iter().map(|s| s.as_str()).collect();
     let mut result = a.to_vec();
     for item in b {
-        if !result.contains(item) {
+        if seen.insert(item.as_str()) {
             result.push(item.clone());
         }
     }

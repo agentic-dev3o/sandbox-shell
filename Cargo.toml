@@ -25,14 +25,10 @@ shellexpand = "3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Process management
-nix = { version = "0.31", features = ["process", "signal"] }
-
 # Utilities
 thiserror = "2"
 anyhow = "1"
 tempfile = "3"
-uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 assert_cmd = "2"

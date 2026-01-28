@@ -1,12 +1,11 @@
 // sandbox-exec invocation
-use crate::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams};
+use crate::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams, SeatbeltError};
 use crate::sandbox::trace::TraceSession;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use tempfile::{NamedTempFile, TempDir};
-use uuid::Uuid;
 
 /// Exit codes for sandbox execution
 pub mod exit_codes {
@@ -19,11 +18,49 @@ pub mod exit_codes {
     pub const SANDBOX_VIOLATION: i32 = 137;
 }
 
+/// Error type for sandbox execution
+#[derive(Debug)]
+pub enum ExecutionError {
+    /// IO error during execution
+    Io(io::Error),
+    /// Seatbelt profile generation error
+    Seatbelt(SeatbeltError),
+}
+
+impl std::fmt::Display for ExecutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExecutionError::Io(e) => write!(f, "IO error: {}", e),
+            ExecutionError::Seatbelt(e) => write!(f, "Seatbelt error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for ExecutionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ExecutionError::Io(e) => Some(e),
+            ExecutionError::Seatbelt(e) => Some(e),
+        }
+    }
+}
+
+impl From<io::Error> for ExecutionError {
+    fn from(e: io::Error) -> Self {
+        ExecutionError::Io(e)
+    }
+}
+
+impl From<SeatbeltError> for ExecutionError {
+    fn from(e: SeatbeltError) -> Self {
+        ExecutionError::Seatbelt(e)
+    }
+}
+
 /// Result of sandbox execution
 #[derive(Debug)]
 pub struct ExecutionResult {
     pub exit_code: i32,
-    pub profile_path: Option<PathBuf>,
 }
 
 /// Execute a command inside a sandbox
@@ -31,7 +68,7 @@ pub fn execute_sandboxed(
     params: &SandboxParams,
     command: &[String],
     shell: Option<&str>,
-) -> io::Result<ExecutionResult> {
+) -> Result<ExecutionResult, ExecutionError> {
     execute_sandboxed_with_trace(params, command, shell, false, None)
 }
 
@@ -42,7 +79,7 @@ pub fn execute_sandboxed_with_trace(
     shell: Option<&str>,
     trace: bool,
     trace_file: Option<&Path>,
-) -> io::Result<ExecutionResult> {
+) -> Result<ExecutionResult, ExecutionError> {
     // Start trace session if requested
     let mut trace_session = if trace || trace_file.is_some() {
         if let Some(path) = trace_file {
@@ -62,7 +99,7 @@ pub fn execute_sandboxed_with_trace(
     };
 
     // Generate the seatbelt profile
-    let profile_content = generate_seatbelt_profile(params);
+    let profile_content = generate_seatbelt_profile(params)?;
 
     // Write profile to temp file
     let profile_file = NamedTempFile::new()?;
@@ -113,7 +150,12 @@ HISTFILE=/dev/null
 HISTSIZE=0
 SAVEHIST=0
 "#;
-            let _ = fs::write(dir.path().join(".zshrc"), zshrc_content);
+            if let Err(e) = fs::write(dir.path().join(".zshrc"), zshrc_content) {
+                eprintln!(
+                    "\x1b[33m[sx:warn]\x1b[0m Failed to disable zsh history: {}",
+                    e
+                );
+            }
             cmd.env("ZDOTDIR", dir.path());
         }
         zdotdir
@@ -138,19 +180,16 @@ SAVEHIST=0
 
     let exit_code = status.code().unwrap_or(exit_codes::GENERAL_ERROR);
 
-    Ok(ExecutionResult {
-        exit_code,
-        profile_path: Some(profile_file.path().to_path_buf()),
-    })
+    Ok(ExecutionResult { exit_code })
 }
 
 /// Execute a command in sandbox and capture output (for non-interactive use)
 pub fn execute_sandboxed_captured(
     params: &SandboxParams,
     command: &[String],
-) -> io::Result<(ExitStatus, Vec<u8>, Vec<u8>)> {
+) -> Result<(ExitStatus, Vec<u8>, Vec<u8>), ExecutionError> {
     // Generate the seatbelt profile
-    let profile_content = generate_seatbelt_profile(params);
+    let profile_content = generate_seatbelt_profile(params)?;
 
     // Write profile to temp file
     let profile_file = NamedTempFile::new()?;
@@ -167,35 +206,15 @@ pub fn execute_sandboxed_captured(
 }
 
 /// Print the generated seatbelt profile (dry-run mode)
-pub fn dry_run(params: &SandboxParams) -> String {
+pub fn dry_run(params: &SandboxParams) -> Result<String, SeatbeltError> {
     generate_seatbelt_profile(params)
-}
-
-/// Create a unique temp file path for the profile
-pub fn temp_profile_path() -> PathBuf {
-    let uuid = Uuid::new_v4();
-    std::env::temp_dir().join(format!("sx-{}.sx", uuid))
-}
-
-/// Write profile to a file and return the path
-pub fn write_profile_file(profile_content: &str) -> io::Result<PathBuf> {
-    let path = temp_profile_path();
-    fs::write(&path, profile_content)?;
-    Ok(path)
-}
-
-/// Clean up a profile file
-pub fn cleanup_profile(path: &PathBuf) -> io::Result<()> {
-    if path.exists() {
-        fs::remove_file(path)?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::schema::NetworkMode;
+    use std::path::PathBuf;
 
     #[test]
     fn test_dry_run_returns_profile() {
@@ -206,25 +225,19 @@ mod tests {
             ..Default::default()
         };
 
-        let profile = dry_run(&params);
+        let profile = dry_run(&params).unwrap();
         assert!(profile.contains("(version 1)"));
         assert!(profile.contains("(deny default)"));
     }
 
     #[test]
-    fn test_temp_profile_path_is_unique() {
-        let path1 = temp_profile_path();
-        let path2 = temp_profile_path();
-        assert_ne!(path1, path2);
-    }
+    fn test_dry_run_fails_on_invalid_path() {
+        let params = SandboxParams {
+            working_dir: PathBuf::from("/tmp/test\"injection"),
+            ..Default::default()
+        };
 
-    #[test]
-    fn test_write_and_cleanup_profile() {
-        let content = "(version 1)\n(deny default)\n";
-        let path = write_profile_file(content).unwrap();
-        assert!(path.exists());
-
-        cleanup_profile(&path).unwrap();
-        assert!(!path.exists());
+        let result = dry_run(&params);
+        assert!(result.is_err());
     }
 }

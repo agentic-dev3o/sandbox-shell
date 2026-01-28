@@ -6,6 +6,56 @@
 use crate::config::schema::NetworkMode;
 use std::path::PathBuf;
 
+/// Error type for seatbelt profile generation
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SeatbeltError {
+    /// Path contains invalid characters that could break seatbelt syntax
+    InvalidPath { path: String, reason: &'static str },
+}
+
+impl std::fmt::Display for SeatbeltError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SeatbeltError::InvalidPath { path, reason } => {
+                write!(f, "Invalid path '{}': {}", path, reason)
+            }
+        }
+    }
+}
+
+impl std::error::Error for SeatbeltError {}
+
+/// Validate and sanitize a path for use in seatbelt profiles.
+/// Returns an error if the path contains characters that could break seatbelt syntax
+/// or potentially inject additional rules.
+fn validate_seatbelt_path(path: &str) -> Result<&str, SeatbeltError> {
+    // Check for null bytes (could truncate the path)
+    if path.contains('\0') {
+        return Err(SeatbeltError::InvalidPath {
+            path: path.to_string(),
+            reason: "path contains null byte",
+        });
+    }
+
+    // Check for unescaped double quotes (could break string literals)
+    if path.contains('"') {
+        return Err(SeatbeltError::InvalidPath {
+            path: path.to_string(),
+            reason: "path contains unescaped double quote",
+        });
+    }
+
+    // Check for newlines (could inject new rules)
+    if path.contains('\n') || path.contains('\r') {
+        return Err(SeatbeltError::InvalidPath {
+            path: path.to_string(),
+            reason: "path contains newline character",
+        });
+    }
+
+    Ok(path)
+}
+
 /// Check if a path string contains glob wildcard characters
 fn contains_glob(path: &str) -> bool {
     path.contains('*') || path.contains('?')
@@ -58,7 +108,11 @@ pub struct SandboxParams {
 /// - Reads: Denied by default, only explicit allow_read paths are accessible
 /// - Writes: Denied by default, allow working dir + explicit paths
 /// - Network: Configurable (offline/localhost/online)
-pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
+///
+/// # Errors
+/// Returns `SeatbeltError::InvalidPath` if any path contains characters that could
+/// break seatbelt syntax or inject additional rules.
+pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, SeatbeltError> {
     let mut profile = String::new();
 
     // Version and default deny
@@ -94,11 +148,12 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     profile.push_str("(allow file-read* (literal \"/\"))\n");
     for path in &params.allow_read {
         let p = path.display().to_string();
-        if contains_glob(&p) {
-            let regex = glob_to_regex(&p);
+        let validated = validate_seatbelt_path(&p)?;
+        if contains_glob(validated) {
+            let regex = glob_to_regex(validated);
             profile.push_str(&format!("(allow file-read* (regex #\"{regex}\"))\n"));
         } else {
-            profile.push_str(&format!("(allow file-read* (subpath \"{p}\"))\n"));
+            profile.push_str(&format!("(allow file-read* (subpath \"{validated}\"))\n"));
         }
     }
     profile.push('\n');
@@ -109,11 +164,12 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
         profile.push_str("; Denied read paths (sensitive data)\n");
         for path in &params.deny_read {
             let p = path.display().to_string();
-            if contains_glob(&p) {
-                let regex = glob_to_regex(&p);
+            let validated = validate_seatbelt_path(&p)?;
+            if contains_glob(validated) {
+                let regex = glob_to_regex(validated);
                 profile.push_str(&format!("(deny file-read* (regex #\"{regex}\"))\n"));
             } else {
-                profile.push_str(&format!("(deny file-read* (subpath \"{p}\"))\n"));
+                profile.push_str(&format!("(deny file-read* (subpath \"{validated}\"))\n"));
             }
         }
         profile.push('\n');
@@ -122,8 +178,9 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
     // Working directory - full read/write access
     profile.push_str("; Working directory (full access)\n");
     if !params.working_dir.as_os_str().is_empty() {
-        let wd = params.working_dir.display();
-        profile.push_str(&format!("(allow file* (subpath \"{wd}\"))\n\n"));
+        let wd = params.working_dir.display().to_string();
+        let validated_wd = validate_seatbelt_path(&wd)?;
+        profile.push_str(&format!("(allow file* (subpath \"{validated_wd}\"))\n\n"));
     }
 
     // Allowed write paths (beyond working directory)
@@ -131,16 +188,17 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
         profile.push_str("; Allowed write paths\n");
         for path in &params.allow_write {
             let p = path.display().to_string();
-            if contains_glob(&p) {
+            let validated = validate_seatbelt_path(&p)?;
+            if contains_glob(validated) {
                 // Glob patterns use regex filter
-                let regex = glob_to_regex(&p);
+                let regex = glob_to_regex(validated);
                 profile.push_str(&format!("(allow file-write* (regex #\"{regex}\"))\n"));
             } else if path.is_file() {
                 // Use regex for files (to include lock files)
-                let escaped = p.replace('.', "\\.");
+                let escaped = validated.replace('.', "\\.");
                 profile.push_str(&format!("(allow file* (regex #\"^{escaped}.*\"))\n"));
             } else {
-                profile.push_str(&format!("(allow file-write* (subpath \"{p}\"))\n"));
+                profile.push_str(&format!("(allow file-write* (subpath \"{validated}\"))\n"));
             }
         }
         profile.push('\n');
@@ -176,7 +234,7 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> String {
         profile.push('\n');
     }
 
-    profile
+    Ok(profile)
 }
 
 #[cfg(test)]
@@ -186,9 +244,59 @@ mod tests {
     #[test]
     fn test_default_params_produces_valid_profile() {
         let params = SandboxParams::default();
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(profile.contains("(version 1)"));
         assert!(profile.contains("(deny default)"));
+    }
+
+    // === Path Validation Tests ===
+
+    #[test]
+    fn test_validate_path_rejects_null_bytes() {
+        let result = validate_seatbelt_path("/path/with\0null");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            SeatbeltError::InvalidPath { reason, .. } if reason.contains("null")
+        ));
+    }
+
+    #[test]
+    fn test_validate_path_rejects_double_quotes() {
+        let result = validate_seatbelt_path("/path/with\"quote");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            SeatbeltError::InvalidPath { reason, .. } if reason.contains("quote")
+        ));
+    }
+
+    #[test]
+    fn test_validate_path_rejects_newlines() {
+        let result = validate_seatbelt_path("/path/with\nnewline");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            SeatbeltError::InvalidPath { reason, .. } if reason.contains("newline")
+        ));
+    }
+
+    #[test]
+    fn test_validate_path_accepts_valid_paths() {
+        assert!(validate_seatbelt_path("/usr/bin").is_ok());
+        assert!(validate_seatbelt_path("/Users/test/.config").is_ok());
+        assert!(validate_seatbelt_path("/private/tmp/zsh*").is_ok());
+        assert!(validate_seatbelt_path("~/.ssh").is_ok());
+    }
+
+    #[test]
+    fn test_generate_profile_fails_on_invalid_path() {
+        let params = SandboxParams {
+            allow_read: vec![PathBuf::from("/path/with\"injection")],
+            ..Default::default()
+        };
+        let result = generate_seatbelt_profile(&params);
+        assert!(result.is_err());
     }
 
     // === Glob/Wildcard Detection Tests ===
@@ -255,7 +363,7 @@ mod tests {
             allow_read: vec![PathBuf::from("/private/tmp/zsh*")],
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         // Should use regex filter, not subpath
         assert!(
             profile.contains(r#"(allow file-read* (regex #"^/private/tmp/zsh.*"))"#),
@@ -274,7 +382,7 @@ mod tests {
             allow_read: vec![PathBuf::from("/private/tmp/claude")],
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         // Non-glob paths should still use subpath
         assert!(
             profile.contains(r#"(allow file-read* (subpath "/private/tmp/claude"))"#),
@@ -288,7 +396,7 @@ mod tests {
             allow_write: vec![PathBuf::from("/private/tmp/zsh*")],
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         // Should use regex filter for write as well
         assert!(
             profile.contains(r#"(allow file-write* (regex #"^/private/tmp/zsh.*"))"#),
@@ -303,7 +411,7 @@ mod tests {
             deny_read: vec![PathBuf::from("/home/*/.ssh")],
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         // Dot in .ssh is escaped to match literal dot, not any character
         assert!(
             profile.contains(r#"(deny file-read* (regex #"^/home/.*/\.ssh"))"#),
@@ -322,7 +430,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         // Regular paths use subpath
         assert!(profile.contains(r#"(allow file-read* (subpath "/usr"))"#));
         assert!(profile.contains(r#"(allow file-read* (subpath "/bin"))"#));
@@ -333,7 +441,7 @@ mod tests {
     #[test]
     fn test_deny_by_default_no_global_read() {
         let params = SandboxParams::default();
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         // Should NOT have global read access - deny by default
         assert!(!profile.contains("(allow file-read* (subpath \"/\"))"));
     }
@@ -344,7 +452,7 @@ mod tests {
             allow_read: vec![PathBuf::from("/usr"), PathBuf::from("/bin")],
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(profile.contains("(allow file-read* (subpath \"/usr\"))"));
         assert!(profile.contains("(allow file-read* (subpath \"/bin\"))"));
     }
@@ -355,7 +463,7 @@ mod tests {
             deny_read: vec![PathBuf::from("/secret")],
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(profile.contains("(deny file-read* (subpath \"/secret\"))"));
     }
 
@@ -366,7 +474,7 @@ mod tests {
             deny_read: vec![PathBuf::from("/home/.ssh")],
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
 
         let deny_pos = profile
             .find("(deny file-read* (subpath \"/home/.ssh\"))")
@@ -387,7 +495,7 @@ mod tests {
             working_dir: PathBuf::from("/projects/myapp"),
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(profile.contains("(allow file* (subpath \"/projects/myapp\"))"));
     }
 
@@ -397,7 +505,7 @@ mod tests {
             network_mode: NetworkMode::Offline,
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(profile.contains("Network disabled"));
         assert!(!profile.contains("(allow network"));
     }
@@ -408,7 +516,7 @@ mod tests {
             network_mode: NetworkMode::Online,
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(profile.contains("(allow network*)"));
     }
 
@@ -418,7 +526,7 @@ mod tests {
             network_mode: NetworkMode::Localhost,
             ..Default::default()
         };
-        let profile = generate_seatbelt_profile(&params);
+        let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(profile.contains("(allow network-outbound (to ip \"localhost:*\"))"));
         assert!(profile.contains("(allow network-inbound (from ip \"localhost:*\"))"));
         // seatbelt doesn't accept IP addresses, only "localhost" or "*"
