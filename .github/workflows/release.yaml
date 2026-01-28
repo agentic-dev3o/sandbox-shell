@@ -110,3 +110,50 @@ jobs:
           git tag -a "v${{ needs.validate.outputs.version }}" -m "Release v${{ needs.validate.outputs.version }}"
           git push origin main
           git push origin "v${{ needs.validate.outputs.version }}"
+
+  # Build release binaries for macOS (Intel and Apple Silicon)
+  build:
+    runs-on: macos-latest
+    needs: [validate, prepare]
+    strategy:
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.validate.outputs.version }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Create archive
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/sx dist/
+          cd dist
+          tar czf sx-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz sx
+          shasum -a 256 sx-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz > sx-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sx-${{ matrix.target }}
+          path: dist/*.tar.gz*
+          retention-days: 1
