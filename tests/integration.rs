@@ -303,7 +303,7 @@ fn test_localhost_mode_profile_content() {
     let temp = TempDir::new().unwrap();
     let params = network_sandbox_params(temp.path().to_path_buf(), NetworkMode::Localhost);
 
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains("(allow network-outbound (to ip \"localhost:*\"))"),
         "Localhost mode should allow outbound to localhost"
@@ -324,7 +324,7 @@ fn test_network_mode_offline_profile_content() {
     let temp = TempDir::new().unwrap();
     let params = network_sandbox_params(temp.path().to_path_buf(), NetworkMode::Offline);
 
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
 
     assert!(
         !profile.contains("(allow network*)"),
@@ -341,7 +341,7 @@ fn test_network_mode_online_profile_content() {
     let temp = TempDir::new().unwrap();
     let params = network_sandbox_params(temp.path().to_path_buf(), NetworkMode::Online);
 
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
 
     assert!(
         profile.contains("(allow network*)"),
@@ -546,7 +546,7 @@ fn test_load_all_builtin_profiles() {
 
 #[test]
 fn test_base_profile_has_required_paths() {
-    let profile = BuiltinProfile::Base.load();
+    let profile = BuiltinProfile::Base.load().unwrap();
 
     assert!(profile
         .filesystem
@@ -578,19 +578,19 @@ fn test_base_profile_has_required_paths() {
 
 #[test]
 fn test_online_profile_sets_network_mode() {
-    let profile = BuiltinProfile::Online.load();
+    let profile = BuiltinProfile::Online.load().unwrap();
     assert_eq!(profile.network_mode, Some(NetworkMode::Online));
 }
 
 #[test]
 fn test_localhost_profile_sets_network_mode() {
-    let profile = BuiltinProfile::Localhost.load();
+    let profile = BuiltinProfile::Localhost.load().unwrap();
     assert_eq!(profile.network_mode, Some(NetworkMode::Localhost));
 }
 
 #[test]
 fn test_rust_profile_allows_cargo() {
-    let profile = BuiltinProfile::Rust.load();
+    let profile = BuiltinProfile::Rust.load().unwrap();
 
     assert!(profile
         .filesystem
@@ -607,9 +607,9 @@ fn test_rust_profile_allows_cargo() {
 #[test]
 fn test_compose_multiple_profiles() {
     let profiles = vec![
-        BuiltinProfile::Base.load(),
-        BuiltinProfile::Rust.load(),
-        BuiltinProfile::Online.load(),
+        BuiltinProfile::Base.load().unwrap(),
+        BuiltinProfile::Rust.load().unwrap(),
+        BuiltinProfile::Online.load().unwrap(),
     ];
 
     let composed = compose_profiles(&profiles);
@@ -630,8 +630,8 @@ fn test_compose_multiple_profiles() {
 #[test]
 fn test_compose_profiles_network_mode_last_wins() {
     let profiles = vec![
-        BuiltinProfile::Online.load(),
-        BuiltinProfile::Localhost.load(),
+        BuiltinProfile::Online.load().unwrap(),
+        BuiltinProfile::Localhost.load().unwrap(),
     ];
 
     let composed = compose_profiles(&profiles);
@@ -702,11 +702,17 @@ allow_write = ["/custom/write"]
 }
 
 #[test]
-fn test_load_missing_profile_returns_empty() {
+fn test_load_missing_profile_falls_back_to_online() {
     let profiles = load_profiles(&["nonexistent".to_string()], None);
-    assert!(
-        profiles.is_empty(),
-        "Should return empty for missing profile"
+    assert_eq!(
+        profiles.len(),
+        1,
+        "Should return one profile (online fallback) for missing profile"
+    );
+    // Verify it's the online profile (has network_mode = Some(Online))
+    assert_eq!(
+        profiles[0].network_mode,
+        Some(sx::config::schema::NetworkMode::Online)
     );
 }
 

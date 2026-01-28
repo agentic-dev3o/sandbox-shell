@@ -1,6 +1,55 @@
 use crate::config::schema::NetworkMode;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::Path;
+
+/// Error type for profile loading
+#[derive(Debug)]
+pub enum ProfileError {
+    /// IO error reading profile file
+    Io(std::io::Error),
+    /// TOML parsing error
+    Parse(toml::de::Error),
+    /// Built-in profile has invalid TOML (should never happen)
+    InvalidBuiltin {
+        name: &'static str,
+        error: toml::de::Error,
+    },
+}
+
+impl std::fmt::Display for ProfileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProfileError::Io(e) => write!(f, "IO error: {}", e),
+            ProfileError::Parse(e) => write!(f, "TOML parse error: {}", e),
+            ProfileError::InvalidBuiltin { name, error } => {
+                write!(f, "Built-in profile '{}' is invalid: {}", name, error)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProfileError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ProfileError::Io(e) => Some(e),
+            ProfileError::Parse(e) => Some(e),
+            ProfileError::InvalidBuiltin { error, .. } => Some(error),
+        }
+    }
+}
+
+impl From<std::io::Error> for ProfileError {
+    fn from(e: std::io::Error) -> Self {
+        ProfileError::Io(e)
+    }
+}
+
+impl From<toml::de::Error> for ProfileError {
+    fn from(e: toml::de::Error) -> Self {
+        ProfileError::Parse(e)
+    }
+}
 
 /// Profile struct for composable sandbox configurations
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -66,8 +115,24 @@ impl BuiltinProfile {
         }
     }
 
+    /// Get the name of this builtin profile
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Base => "base",
+            Self::Online => "online",
+            Self::Localhost => "localhost",
+            Self::Rust => "rust",
+            Self::Claude => "claude",
+            Self::Gpg => "gpg",
+        }
+    }
+
     /// Load the profile data from embedded TOML files
-    pub fn load(&self) -> Profile {
+    ///
+    /// # Errors
+    /// Returns `ProfileError::InvalidBuiltin` if the embedded TOML is invalid.
+    /// This should never happen with properly tested builtin profiles.
+    pub fn load(&self) -> Result<Profile, ProfileError> {
         let toml_str = match self {
             Self::Base => include_str!("../../profiles/base.toml"),
             Self::Online => include_str!("../../profiles/online.toml"),
@@ -76,42 +141,95 @@ impl BuiltinProfile {
             Self::Claude => include_str!("../../profiles/claude.toml"),
             Self::Gpg => include_str!("../../profiles/gpg.toml"),
         };
-        toml::from_str(toml_str).expect("builtin profile TOML is invalid")
+        toml::from_str(toml_str).map_err(|e| ProfileError::InvalidBuiltin {
+            name: self.name(),
+            error: e,
+        })
     }
 }
 
 /// Load a profile from a TOML file
-pub fn load_profile(path: &Path) -> Result<Profile, std::io::Error> {
+pub fn load_profile(path: &Path) -> Result<Profile, ProfileError> {
     let content = std::fs::read_to_string(path)?;
-    toml::from_str(&content).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    Ok(toml::from_str(&content)?)
 }
 
-/// Load profiles by name, optionally searching in a custom directory
+/// Load profiles by name, optionally searching in a custom directory.
+/// Logs warnings for profiles that fail to load instead of silently skipping them.
 pub fn load_profiles(names: &[String], custom_dir: Option<&Path>) -> Vec<Profile> {
     names
         .iter()
         .filter_map(|name| {
             // First try builtin profiles
             if let Some(builtin) = BuiltinProfile::from_name(name) {
-                return Some(builtin.load());
+                match builtin.load() {
+                    Ok(profile) => return Some(profile),
+                    Err(e) => {
+                        // This should never happen with properly tested builtin profiles
+                        eprintln!(
+                            "\x1b[31m[sx:error]\x1b[0m Failed to load builtin profile '{}': {}",
+                            name, e
+                        );
+                        return None;
+                    }
+                }
             }
+
             // Then try custom directory
             if let Some(dir) = custom_dir {
                 let path = dir.join(format!("{}.toml", name));
                 if path.exists() {
-                    return load_profile(&path).ok();
+                    match load_profile(&path) {
+                        Ok(profile) => return Some(profile),
+                        Err(e) => {
+                            eprintln!(
+                                "\x1b[33m[sx:warn]\x1b[0m Failed to load profile '{}' from {}: {}",
+                                name,
+                                path.display(),
+                                e
+                            );
+                            return None;
+                        }
+                    }
                 }
             }
+
             // Try global profile directory
             if let Some(config_dir) = dirs::config_dir() {
                 let path = config_dir
                     .join("sx/profiles")
                     .join(format!("{}.toml", name));
                 if path.exists() {
-                    return load_profile(&path).ok();
+                    match load_profile(&path) {
+                        Ok(profile) => return Some(profile),
+                        Err(e) => {
+                            eprintln!(
+                                "\x1b[33m[sx:warn]\x1b[0m Failed to load profile '{}' from {}: {}",
+                                name,
+                                path.display(),
+                                e
+                            );
+                            return None;
+                        }
+                    }
                 }
             }
-            None
+
+            // Profile not found - warn and fallback to online
+            eprintln!(
+                "\x1b[33m[sx:warn]\x1b[0m Unknown profile '{}', falling back to 'online'",
+                name
+            );
+            match BuiltinProfile::Online.load() {
+                Ok(profile) => Some(profile),
+                Err(e) => {
+                    eprintln!(
+                        "\x1b[31m[sx:error]\x1b[0m Failed to load fallback 'online' profile: {}",
+                        e
+                    );
+                    None
+                }
+            }
         })
         .collect()
 }
@@ -148,9 +266,13 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
     result
 }
 
+/// Merge unique strings from source into target.
+/// Uses HashSet for O(1) lookups instead of O(n) contains() checks.
 fn merge_unique(target: &mut Vec<String>, source: &[String]) {
+    // Build set of existing items (owned strings to avoid borrow conflicts)
+    let existing: HashSet<String> = target.iter().cloned().collect();
     for item in source {
-        if !target.contains(item) {
+        if !existing.contains(item) {
             target.push(item.clone());
         }
     }

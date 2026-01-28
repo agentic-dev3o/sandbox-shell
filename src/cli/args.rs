@@ -1,17 +1,8 @@
 use clap::Parser;
 use std::path::PathBuf;
 
-/// Network access mode for the sandbox
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NetworkMode {
-    /// Block all network access (default)
-    #[default]
-    Offline,
-    /// Allow all network access
-    Online,
-    /// Allow localhost only
-    Localhost,
-}
+// Re-export NetworkMode from config schema to avoid duplication
+pub use crate::config::schema::NetworkMode;
 
 /// sx - Lightweight sandbox for macOS development
 ///
@@ -24,13 +15,9 @@ pub enum NetworkMode {
     base        Minimal sandbox (always included)\n    \
     online      Full network access\n    \
     localhost   Localhost network only\n    \
-    node        Node.js/npm toolchain\n    \
-    python      Python toolchain\n    \
     rust        Rust/Cargo toolchain\n    \
-    go          Go toolchain\n    \
     claude      Claude Code (~/.claude access)\n    \
-    gpg         GPG signing support\n    \
-    git         Git with signing support")]
+    gpg         GPG signing support")]
 pub struct Args {
     /// Enable verbose output (show sandbox config)
     #[arg(short, long)]
@@ -95,7 +82,7 @@ pub struct Args {
     #[arg(long = "deny-read", value_name = "PATH")]
     pub deny_read: Vec<String>,
 
-    /// Profiles to apply (e.g., online, node, claude)
+    /// Profiles to apply (e.g., online, rust, claude)
     #[arg(value_name = "PROFILES")]
     pub profiles: Vec<String>,
 

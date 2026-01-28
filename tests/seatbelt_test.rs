@@ -11,7 +11,7 @@ fn test_generate_deny_default() {
         network_mode: NetworkMode::Offline,
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains("(deny default)"),
         "Profile should deny by default"
@@ -26,7 +26,7 @@ fn test_allow_working_directory() {
         network_mode: NetworkMode::Offline,
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains(r#"(subpath "/Users/test/project")"#),
         "Profile should allow working directory"
@@ -36,7 +36,7 @@ fn test_allow_working_directory() {
 #[test]
 fn test_version_1() {
     let params = SandboxParams::default();
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains("(version 1)"),
         "Profile should have version 1"
@@ -51,7 +51,7 @@ fn test_network_offline() {
         network_mode: NetworkMode::Offline,
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     // In offline mode, no network-outbound should be allowed
     assert!(
         !profile.contains("(allow network-outbound"),
@@ -67,7 +67,7 @@ fn test_network_online() {
         network_mode: NetworkMode::Online,
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains("(allow network-outbound)") || profile.contains("(allow network*)"),
         "Online mode should allow network"
@@ -82,7 +82,7 @@ fn test_network_localhost() {
         network_mode: NetworkMode::Localhost,
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains("localhost") || profile.contains("127.0.0.1"),
         "Localhost mode should reference localhost"
@@ -98,7 +98,7 @@ fn test_deny_by_default_reads() {
         allow_read: vec![PathBuf::from("/usr"), PathBuf::from("/bin")],
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     // Should NOT have global read access
     assert!(
         !profile.contains(r#"(allow file-read* (subpath "/"))"#),
@@ -123,7 +123,7 @@ fn test_deny_read_paths() {
         deny_read: vec![PathBuf::from("/Users/test/.ssh")],
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains(r#"(subpath "/Users/test/.ssh")"#),
         "Should reference denied path"
@@ -141,7 +141,7 @@ fn test_allow_write_paths() {
         allow_write: vec![PathBuf::from("/tmp")],
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains("file-write") && profile.contains(r#"(subpath "/tmp")"#),
         "Should allow write to /tmp"
@@ -151,7 +151,7 @@ fn test_allow_write_paths() {
 #[test]
 fn test_process_fork_allowed() {
     let params = SandboxParams::default();
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains("(allow process-fork)"),
         "Should allow process-fork for child processes"
@@ -161,7 +161,7 @@ fn test_process_fork_allowed() {
 #[test]
 fn test_process_exec_allowed() {
     let params = SandboxParams::default();
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains("(allow process-exec)"),
         "Should allow process-exec for running commands"
@@ -170,7 +170,7 @@ fn test_process_exec_allowed() {
 
 #[test]
 fn test_base_profile_integration() {
-    let base = BuiltinProfile::Base.load();
+    let base = BuiltinProfile::Base.load().unwrap();
     let composed = compose_profiles(&[base]);
 
     let expand_path = |p: &str| -> PathBuf {
@@ -206,7 +206,7 @@ fn test_base_profile_integration() {
         ..Default::default()
     };
 
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
 
     // Base profile should deny SSH
     assert!(
@@ -234,7 +234,7 @@ fn test_raw_seatbelt_rules() {
         raw_rules: Some(raw_rules.to_string()),
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     assert!(
         profile.contains(raw_rules),
         "Should include raw seatbelt rules"
@@ -252,7 +252,7 @@ fn test_profile_is_valid_sexp() {
         allow_write: vec![PathBuf::from("/tmp")],
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
 
     // Basic s-expression validation: count parens
     let open_parens = profile.chars().filter(|c| *c == '(').count();
@@ -266,7 +266,7 @@ fn test_profile_is_valid_sexp() {
 #[test]
 fn test_mach_lookup_required() {
     let params = SandboxParams::default();
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     // mach-lookup is required for basic system functionality
     assert!(
         profile.contains("mach-lookup") || profile.contains("mach*"),
@@ -277,7 +277,7 @@ fn test_mach_lookup_required() {
 #[test]
 fn test_signal_allowed() {
     let params = SandboxParams::default();
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     // signal is required for process control
     assert!(
         profile.contains("(allow signal"),
@@ -288,7 +288,7 @@ fn test_signal_allowed() {
 #[test]
 fn test_system_read_paths() {
     let params = SandboxParams::default();
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     // System read paths like /dev should be allowed
     assert!(
         profile.contains("/dev") || profile.contains("sysctl-read"),
@@ -306,8 +306,20 @@ fn test_empty_paths_handled() {
         allow_write: vec![],
         ..Default::default()
     };
-    let profile = generate_seatbelt_profile(&params);
+    let profile = generate_seatbelt_profile(&params).unwrap();
     // Should still produce valid profile
     assert!(profile.contains("(version 1)"));
     assert!(profile.contains("(deny default)"));
+}
+
+#[test]
+fn test_invalid_path_rejected() {
+    let params = SandboxParams {
+        working_dir: PathBuf::from("/tmp"),
+        home_dir: PathBuf::from("/Users/test"),
+        allow_read: vec![PathBuf::from("/path/with\"quote")],
+        ..Default::default()
+    };
+    let result = generate_seatbelt_profile(&params);
+    assert!(result.is_err(), "Paths with quotes should be rejected");
 }

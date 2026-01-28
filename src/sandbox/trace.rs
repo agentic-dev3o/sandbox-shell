@@ -4,12 +4,72 @@
 //! filtering for relevant violations to help debug sandbox issues.
 
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
+
+/// Category of sandbox violation for type-safe handling
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViolationKind {
+    Network,
+    Read,
+    Write,
+    Process,
+    Mach,
+    Other,
+}
+
+impl ViolationKind {
+    /// Get ANSI-colored display string for this violation kind
+    pub fn colored(&self) -> &'static str {
+        match self {
+            ViolationKind::Network => "\x1b[31m[NETWORK]\x1b[0m",
+            ViolationKind::Read => "\x1b[33m[READ]\x1b[0m",
+            ViolationKind::Write => "\x1b[35m[WRITE]\x1b[0m",
+            ViolationKind::Process => "\x1b[36m[PROCESS]\x1b[0m",
+            ViolationKind::Mach => "\x1b[34m[MACH]\x1b[0m",
+            ViolationKind::Other => "\x1b[90m[OTHER]\x1b[0m",
+        }
+    }
+
+    /// Get plain text display string for this violation kind
+    pub fn plain(&self) -> &'static str {
+        match self {
+            ViolationKind::Network => "[NETWORK]",
+            ViolationKind::Read => "[READ]",
+            ViolationKind::Write => "[WRITE]",
+            ViolationKind::Process => "[PROCESS]",
+            ViolationKind::Mach => "[MACH]",
+            ViolationKind::Other => "[OTHER]",
+        }
+    }
+
+    /// Determine violation kind from operation string
+    fn from_operation(operation: &str) -> Self {
+        if operation.contains("network") {
+            ViolationKind::Network
+        } else if operation.contains("file-read") {
+            ViolationKind::Read
+        } else if operation.contains("file-write") {
+            ViolationKind::Write
+        } else if operation.contains("process") {
+            ViolationKind::Process
+        } else if operation.contains("mach") {
+            ViolationKind::Mach
+        } else {
+            ViolationKind::Other
+        }
+    }
+}
+
+/// Destination for trace output
+enum TraceOutput {
+    Stderr,
+    File(File),
+}
 
 /// Handle to a running trace session
 pub struct TraceSession {
@@ -20,7 +80,7 @@ pub struct TraceSession {
 impl TraceSession {
     /// Start a new trace session that streams sandbox violations to stderr
     pub fn start() -> std::io::Result<Self> {
-        Self::start_with_output(None)
+        Self::start_with_output(TraceOutput::Stderr)
     }
 
     /// Start a new trace session that streams sandbox violations to a file
@@ -30,14 +90,13 @@ impl TraceSession {
             .write(true)
             .truncate(true)
             .open(path)?;
-        Self::start_with_output(Some(file))
+        Self::start_with_output(TraceOutput::File(file))
     }
 
-    /// Start a trace session with optional file output
-    fn start_with_output(file: Option<File>) -> std::io::Result<Self> {
+    /// Start a trace session with specified output destination
+    fn start_with_output(output: TraceOutput) -> std::io::Result<Self> {
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
-        let file = file.map(|f| Arc::new(Mutex::new(f)));
 
         // Use macOS `log stream` to capture sandbox violations
         // Sandbox denials are logged by the kernel with sender "Sandbox"
@@ -55,9 +114,13 @@ impl TraceSession {
             .spawn()?;
 
         // Spawn a thread to read and filter the log output
+        // Move ownership of output directly into the thread (no Arc<Mutex> needed)
         if let Some(stdout) = child.stdout.take() {
             thread::spawn(move || {
                 let reader = BufReader::new(stdout);
+                let mut output = output;
+                let mut write_error_logged = false;
+
                 for line in reader.lines() {
                     if !running_clone.load(Ordering::Relaxed) {
                         break;
@@ -65,16 +128,26 @@ impl TraceSession {
                     if let Ok(line) = line {
                         // Filter for denial messages and format output
                         if let Some(formatted) = format_violation(&line) {
-                            if let Some(ref file) = file {
-                                // Write to file (strip ANSI codes for file output)
-                                if let Ok(mut f) = file.lock() {
+                            match &mut output {
+                                TraceOutput::File(file) => {
+                                    // Write to file (strip ANSI codes for file output)
                                     let plain = strip_ansi_codes(&formatted);
-                                    let _ = writeln!(f, "{}", plain);
-                                    let _ = f.flush();
+                                    if let Err(e) = writeln!(file, "{}", plain) {
+                                        // Log error once to avoid spam
+                                        if !write_error_logged {
+                                            eprintln!(
+                                                "\x1b[33m[sx:trace]\x1b[0m Warning: failed to write to trace file: {}",
+                                                e
+                                            );
+                                            write_error_logged = true;
+                                        }
+                                    }
+                                    // Best effort flush, don't spam errors for this
+                                    let _ = file.flush();
                                 }
-                            } else {
-                                // Write to stderr
-                                eprintln!("{}", formatted);
+                                TraceOutput::Stderr => {
+                                    eprintln!("{}", formatted);
+                                }
                             }
                         }
                     }
@@ -88,8 +161,25 @@ impl TraceSession {
     /// Stop the trace session
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::Relaxed);
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+
+        // Kill the log stream process
+        if let Err(e) = self.child.kill() {
+            // ESRCH (no such process) is expected if already exited
+            if e.kind() != ErrorKind::NotFound && e.kind() != ErrorKind::InvalidInput {
+                eprintln!(
+                    "\x1b[33m[sx:trace]\x1b[0m Warning: failed to stop log stream: {}",
+                    e
+                );
+            }
+        }
+
+        // Always try to reap the child process to prevent zombies
+        if let Err(e) = self.child.wait() {
+            eprintln!(
+                "\x1b[33m[sx:trace]\x1b[0m Warning: failed to wait for log stream: {}",
+                e
+            );
+        }
     }
 }
 
@@ -114,52 +204,40 @@ fn format_violation(line: &str) -> Option<String> {
 
     // Extract the sandbox denial part
     // Look for "Sandbox: process(pid) deny(N) operation target"
-    if let Some(sandbox_start) = line.find("Sandbox: ") {
-        let sandbox_part = &line[sandbox_start + 9..]; // Skip "Sandbox: "
+    let sandbox_start = line.find("Sandbox: ")?;
+    let sandbox_part = &line[sandbox_start + 9..]; // Skip "Sandbox: "
 
-        // Parse: "process(pid) deny(N) operation target"
-        let parts: Vec<&str> = sandbox_part.splitn(2, " deny").collect();
-        if parts.len() < 2 {
-            return None;
-        }
-
-        let process = parts[0].trim();
-        let deny_rest = parts[1].trim();
-
-        // Skip the "(N) " part to get "operation target"
-        let op_target = if let Some(paren_end) = deny_rest.find(") ") {
-            &deny_rest[paren_end + 2..]
-        } else {
-            deny_rest
-        };
-
-        // Split operation and target
-        let op_parts: Vec<&str> = op_target.splitn(2, ' ').collect();
-        let operation = op_parts.first().unwrap_or(&"unknown");
-        let target = op_parts.get(1).unwrap_or(&"");
-
-        // Categorize the violation
-        let category = if operation.contains("network") {
-            "\x1b[31m[NETWORK]\x1b[0m"
-        } else if operation.contains("file-read") {
-            "\x1b[33m[READ]\x1b[0m"
-        } else if operation.contains("file-write") {
-            "\x1b[35m[WRITE]\x1b[0m"
-        } else if operation.contains("process") {
-            "\x1b[36m[PROCESS]\x1b[0m"
-        } else if operation.contains("mach") {
-            "\x1b[34m[MACH]\x1b[0m"
-        } else {
-            "\x1b[90m[OTHER]\x1b[0m"
-        };
-
-        return Some(format!(
-            "\x1b[90m[sx:trace]\x1b[0m {} \x1b[1m{}\x1b[0m {} \x1b[90m({})\x1b[0m",
-            category, operation, target, process
-        ));
+    // Parse: "process(pid) deny(N) operation target"
+    let parts: Vec<&str> = sandbox_part.splitn(2, " deny").collect();
+    if parts.len() < 2 {
+        return None;
     }
 
-    None
+    let process = parts[0].trim();
+    let deny_rest = parts[1].trim();
+
+    // Skip the "(N) " part to get "operation target"
+    let op_target = if let Some(paren_end) = deny_rest.find(") ") {
+        &deny_rest[paren_end + 2..]
+    } else {
+        deny_rest
+    };
+
+    // Split operation and target
+    let op_parts: Vec<&str> = op_target.splitn(2, ' ').collect();
+    let operation = op_parts.first().unwrap_or(&"unknown");
+    let target = op_parts.get(1).unwrap_or(&"");
+
+    // Categorize the violation using type-safe enum
+    let kind = ViolationKind::from_operation(operation);
+
+    Some(format!(
+        "\x1b[90m[sx:trace]\x1b[0m {} \x1b[1m{}\x1b[0m {} \x1b[90m({})\x1b[0m",
+        kind.colored(),
+        operation,
+        target,
+        process
+    ))
 }
 
 /// Strip ANSI escape codes from a string for plain text output
@@ -191,6 +269,52 @@ fn strip_ansi_codes(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // === ViolationKind Tests ===
+
+    #[test]
+    fn test_violation_kind_from_operation() {
+        assert_eq!(
+            ViolationKind::from_operation("network-outbound"),
+            ViolationKind::Network
+        );
+        assert_eq!(
+            ViolationKind::from_operation("file-read-data"),
+            ViolationKind::Read
+        );
+        assert_eq!(
+            ViolationKind::from_operation("file-write-data"),
+            ViolationKind::Write
+        );
+        assert_eq!(
+            ViolationKind::from_operation("process-exec"),
+            ViolationKind::Process
+        );
+        assert_eq!(
+            ViolationKind::from_operation("mach-lookup"),
+            ViolationKind::Mach
+        );
+        assert_eq!(
+            ViolationKind::from_operation("unknown-op"),
+            ViolationKind::Other
+        );
+    }
+
+    #[test]
+    fn test_violation_kind_colored() {
+        assert!(ViolationKind::Network.colored().contains("31m")); // Red
+        assert!(ViolationKind::Read.colored().contains("33m")); // Yellow
+        assert!(ViolationKind::Write.colored().contains("35m")); // Magenta
+    }
+
+    #[test]
+    fn test_violation_kind_plain() {
+        assert_eq!(ViolationKind::Network.plain(), "[NETWORK]");
+        assert_eq!(ViolationKind::Read.plain(), "[READ]");
+        assert_eq!(ViolationKind::Write.plain(), "[WRITE]");
+    }
+
+    // === Format Violation Tests ===
 
     #[test]
     fn test_format_violation_network() {

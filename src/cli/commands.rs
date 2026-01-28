@@ -107,7 +107,8 @@ pub fn explain(args: &Args) -> Result<()> {
 /// Print generated sandbox profile without executing
 pub fn dry_run(args: &Args) -> Result<()> {
     let context = build_sandbox_context(args)?;
-    let profile = generate_seatbelt_profile(&context.params);
+    let profile = generate_seatbelt_profile(&context.params)
+        .context("Failed to generate seatbelt profile")?;
 
     if args.verbose {
         println!("# Profiles: {}", context.profile_names.join(", "));
@@ -291,9 +292,8 @@ fn build_sandbox_params(
 /// Determine network mode with precedence: CLI > profile > config
 fn determine_network_mode(args: &Args, profile: &Profile, config: &Config) -> NetworkMode {
     // CLI flags take highest precedence
-    let cli_mode = args.network_mode();
     if args.online || args.localhost || args.offline {
-        return convert_network_mode(cli_mode);
+        return args.network_mode();
     }
 
     // Profile network mode
@@ -306,15 +306,6 @@ fn determine_network_mode(args: &Args, profile: &Profile, config: &Config) -> Ne
         .sandbox
         .network
         .unwrap_or(config.sandbox.default_network)
-}
-
-/// Convert CLI NetworkMode to config NetworkMode
-fn convert_network_mode(mode: super::args::NetworkMode) -> NetworkMode {
-    match mode {
-        super::args::NetworkMode::Offline => NetworkMode::Offline,
-        super::args::NetworkMode::Online => NetworkMode::Online,
-        super::args::NetworkMode::Localhost => NetworkMode::Localhost,
-    }
 }
 
 /// Collect allow-read paths from config, profile, and CLI
@@ -355,7 +346,7 @@ fn generate_config_template() -> &'static str {
 inherit_global = true
 
 # Profiles to apply for this project
-# Available: base, online, localhost, node, python, rust, go, claude, gpg
+# Available: base, online, localhost, rust, claude, gpg
 profiles = []
 
 # Default network mode: "offline", "online", or "localhost"
@@ -411,13 +402,13 @@ mod tests {
 
     #[test]
     fn test_collect_profile_names_adds_cli_profiles() {
-        let args = Args::try_parse_from(["sx", "online", "node"]).unwrap();
+        let args = Args::try_parse_from(["sx", "online", "rust"]).unwrap();
         let config = Config::default();
         let working_dir = PathBuf::from("/tmp");
 
         let names = collect_profile_names(&args, &config, &working_dir);
         assert!(names.contains(&"online".to_string()));
-        assert!(names.contains(&"node".to_string()));
+        assert!(names.contains(&"rust".to_string()));
     }
 
     #[test]
