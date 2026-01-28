@@ -61,3 +61,52 @@ jobs:
 
       - name: Run cargo deny
         run: cargo deny check
+
+  # Prepare release: bump version, generate changelog, create tag
+  prepare:
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-release-tools-v1
+
+      - name: Install release tools
+        run: |
+          # Install cargo-edit for version bumping
+          cargo install cargo-edit --locked
+          # Install git-cliff for changelog generation
+          cargo install git-cliff --locked
+
+      - name: Bump version in Cargo.toml
+        run: |
+          cargo set-version ${{ needs.validate.outputs.version }}
+          cargo update -p sx
+
+      - name: Generate changelog
+        run: |
+          git-cliff --tag v${{ needs.validate.outputs.version }} --output CHANGELOG.md
+
+      - name: Commit version bump and changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock CHANGELOG.md
+          git commit -m "chore(release): v${{ needs.validate.outputs.version }}"
+          git tag -a "v${{ needs.validate.outputs.version }}" -m "Release v${{ needs.validate.outputs.version }}"
+          git push origin main
+          git push origin "v${{ needs.validate.outputs.version }}"
