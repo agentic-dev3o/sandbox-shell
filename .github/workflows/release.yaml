@@ -270,6 +270,7 @@ jobs:
           formula-name: sx
           homebrew-tap: agentic-dev3o/homebrew-sx
           tag-name: v${{ needs.validate.outputs.version }}
+          push-to: origin
           commit-message: |
             {{formulaName}} {{version}}
 
