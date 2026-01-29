@@ -274,16 +274,52 @@ jobs:
           repositories: homebrew-sx
 
       - name: Update Homebrew formula
-        uses: mislav/bump-homebrew-formula-action@v3
-        with:
-          formula-name: sx
-          homebrew-tap: agentic-dev3o/homebrew-sx
-          tag-name: v${{ needs.validate.outputs.version }}
-          create-pullrequest: false
-          create-branch: false
-          commit-message: |
-            {{formulaName}} {{version}}
-
-            Created by https://github.com/mislav/bump-homebrew-formula-action
         env:
-          COMMITTER_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -e
+
+          VERSION="${{ needs.validate.outputs.version }}"
+          REPO="agentic-dev3o/sandbox-shell"
+          TAP_REPO="agentic-dev3o/homebrew-sx"
+
+          echo "==> Updating formula to version ${VERSION}"
+
+          # Download source tarball and calculate SHA256
+          TARBALL_URL="https://github.com/${REPO}/archive/refs/tags/v${VERSION}.tar.gz"
+          echo "==> Downloading ${TARBALL_URL}"
+
+          HTTP_CODE=$(curl -sL -w "%{http_code}" -o /tmp/source.tar.gz "$TARBALL_URL")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Error: Failed to download tarball (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+
+          SHA256=$(shasum -a 256 /tmp/source.tar.gz | cut -d' ' -f1)
+          echo "==> SHA256: ${SHA256}"
+
+          # Get current formula
+          echo "==> Fetching current formula"
+          gh api "repos/${TAP_REPO}/contents/Formula/sx.rb" --jq '.content' | base64 -d > /tmp/formula.rb
+
+          # Update version and SHA256 in formula
+          echo "==> Updating formula"
+          sed -i -E "s|url \"https://github.com/${REPO}/archive/refs/tags/v[^\"]+\.tar\.gz\"|url \"${TARBALL_URL}\"|" /tmp/formula.rb
+          sed -i -E "s|sha256 \"[a-f0-9]+\"|sha256 \"${SHA256}\"|" /tmp/formula.rb
+
+          # Get current file SHA (needed for update)
+          FILE_SHA=$(gh api "repos/${TAP_REPO}/contents/Formula/sx.rb" --jq '.sha')
+          echo "==> Current file SHA: ${FILE_SHA}"
+
+          # Commit updated formula
+          echo "==> Committing changes"
+          CONTENT_BASE64=$(base64 -w 0 /tmp/formula.rb)
+
+          gh api "repos/${TAP_REPO}/contents/Formula/sx.rb" \
+            -X PUT \
+            -f message="sx ${VERSION}" \
+            -f content="${CONTENT_BASE64}" \
+            -f sha="$FILE_SHA" \
+            -f branch="main"
+
+          echo "==> Formula updated successfully"
