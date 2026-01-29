@@ -311,17 +311,14 @@ jobs:
           echo "==> Fetching current formula"
           gh api "repos/${TAP_REPO}/contents/Formula/sx.rb" --jq '.content' | base64 -d > /tmp/formula.rb
 
-          # Update formula
+          # Update formula (version is auto-extracted from URL by Homebrew)
           echo "==> Updating formula"
 
-          # Update version
-          sed -i -E "s|version \"[^\"]+\"|version \"${VERSION}\"|" /tmp/formula.rb
+          # Update ARM64 URL
+          sed -i "s|releases/download/v[^/]*/sx-[^-]*-aarch64|releases/download/v${VERSION}/sx-${VERSION}-aarch64|" /tmp/formula.rb
 
-          # Update ARM64 URL and SHA256 (in on_arm block)
-          sed -i -E "s|url \"https://github.com/${REPO}/releases/download/v[^/]+/sx-[^-]+-aarch64-apple-darwin\.tar\.gz\"|url \"${ARM64_URL}\"|" /tmp/formula.rb
-
-          # Update x86_64 URL and SHA256 (in on_intel block)
-          sed -i -E "s|url \"https://github.com/${REPO}/releases/download/v[^/]+/sx-[^-]+-x86_64-apple-darwin\.tar\.gz\"|url \"${X86_64_URL}\"|" /tmp/formula.rb
+          # Update x86_64 URL
+          sed -i "s|releases/download/v[^/]*/sx-[^-]*-x86_64|releases/download/v${VERSION}/sx-${VERSION}-x86_64|" /tmp/formula.rb
 
           # Update SHA256 values - ARM64 first (appears first in file), then x86_64
           # Use awk to update sha256 values in order of appearance
