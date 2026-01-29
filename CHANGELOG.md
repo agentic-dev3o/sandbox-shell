@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **ci:** Update homebrew script for binary formula
+
+
+
+### Bug Fixes
+
 - **ci:** Replace mislav action with custom homebrew update script
 
 
