@@ -18,8 +18,9 @@ A lightweight Rust CLI that wraps shell commands and terminals in macOS Seatbelt
 ## Quick Start
 
 ```bash
-# Install
-cargo install --path .
+# Install via Homebrew
+brew tap agentic-dev3o/sx
+brew install sx
 
 # Run commands in an isolated sandbox (network blocked, credentials protected)
 sx -- bun lint
@@ -34,7 +35,16 @@ That's it. Your credentials (`~/.ssh`, `~/.aws`, `~/.gnupg`) and personal files 
 
 ## Installation
 
-### Using Cargo (Recommended)
+### Homebrew (Recommended)
+
+```bash
+brew tap agentic-dev3o/sx
+brew install sx
+```
+
+### From Source
+
+For development or if you want full control over the build:
 
 ```bash
 git clone https://github.com/agentic-dev3o/sandbox-shell.git
@@ -42,7 +52,7 @@ cd sandbox-shell
 cargo install --path .
 ```
 
-### Manual Build
+Or build manually:
 
 ```bash
 cargo build --release
@@ -56,7 +66,7 @@ sx --version
 sx --help
 ```
 
-**Requirements:** macOS (uses Apple's Seatbelt sandbox), Rust 1.70+
+**Requirements:** macOS (uses Apple's Seatbelt sandbox). Building from source requires Rust 1.70+.
 
 ## Use Cases
 
