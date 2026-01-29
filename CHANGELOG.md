@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **ci:** Replace mislav action with custom homebrew update script
+
+
+
+### Bug Fixes
+
 - **ci:** Use full repo path for homebrew tap push-to
 
 - **ci:** Configure homebrew action for direct push to tap
