@@ -28,52 +28,53 @@ _sx() {
         'base:Minimal sandbox (always included)'
         'online:Full network access'
         'localhost:Localhost network only'
-        'node:Node.js/npm toolchain'
-        'python:Python toolchain'
         'rust:Rust/Cargo toolchain'
-        'go:Go toolchain'
         'claude:Claude Code support'
         'gpg:GPG signing support'
-        'git:Git with signing'
     )
 
-    local -a options
-    options=(
-        '--help:Show help'
-        '--version:Show version'
-        '--verbose:Verbose output'
-        '--debug:Debug mode'
-        '--trace:Trace sandbox violations'
-        '--dry-run:Show profile without executing'
-        '--explain:Show what would be allowed/denied'
-        '--init:Initialize .sandbox.toml'
-        '--offline:Block all network'
-        '--online:Allow all network'
-        '--localhost:Allow localhost only'
-    )
-
-    _arguments \
+    _arguments -s \
         '(-h --help)'{-h,--help}'[Show help]' \
         '(-V --version)'{-V,--version}'[Show version]' \
         '(-v --verbose)'{-v,--verbose}'[Verbose output]' \
         '(-d --debug)'{-d,--debug}'[Debug mode]' \
         '(-t --trace)'{-t,--trace}'[Trace violations]' \
+        '--trace-file=[Write trace to file]:file:_files' \
         '(-n --dry-run)'{-n,--dry-run}'[Show profile]' \
+        '(-c --config)'{-c,--config}'=[Use config file]:file:_files' \
+        '--no-config[Ignore all config files]' \
         '--explain[Show permissions]' \
         '--init[Initialize config]' \
         '--offline[Block network]' \
         '--online[Allow network]' \
         '--localhost[Localhost only]' \
-        '*:profile:_describe "profile" profiles' \
-        '-- :command:_command_names'
+        '*--allow-read=[Allow read access]:path:_files' \
+        '*--allow-write=[Allow write access]:path:_files' \
+        '*--deny-read=[Deny read access]:path:_files' \
+        '*:: :->args'
+
+    case $state in
+        args)
+            if [[ ${words[CURRENT]} == -* ]]; then
+                return
+            fi
+            # Check if we're past -- (command mode)
+            local i
+            for (( i=1; i < CURRENT; i++ )); do
+                if [[ ${words[i]} == "--" ]]; then
+                    _command_names
+                    return
+                fi
+            done
+            _describe -t profiles 'profile' profiles
+            ;;
+    esac
 }
 
 compdef _sx sx
 
 # Aliases for common patterns
-alias sxo='sx online'
-alias sxl='sx localhost'
-alias sxn='sx online node'
-alias sxp='sx online python'
-alias sxr='sx online rust'
-alias sxc='sx gpg online claude'
+alias sxo='sx online'              # Online network access
+alias sxl='sx localhost'           # Localhost only
+alias sxr='sx online rust'         # Rust with network
+alias sxc='sx online gpg claude'   # Claude Code with GPG signing

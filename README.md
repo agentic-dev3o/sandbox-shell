@@ -140,13 +140,20 @@ sx --dry-run rust           # Preview sandbox profile
 | Option | Description |
 |--------|-------------|
 | `-v, --verbose` | Show sandbox configuration |
+| `-d, --debug` | Enable debug mode (log all denials) |
 | `-t, --trace` | Trace sandbox violations in real-time (see note below) |
 | `--trace-file <PATH>` | Write trace output to file instead of stderr |
 | `-n, --dry-run` | Print sandbox profile without executing |
+| `-c, --config <PATH>` | Use specific config file |
+| `--no-config` | Ignore all config files |
 | `--explain` | Show what would be allowed/denied |
 | `--init` | Create `.sandbox.toml` in current directory |
+| `--offline` | Block all network (default) |
+| `--online` | Allow all network |
+| `--localhost` | Allow localhost only |
 | `--allow-read <PATH>` | Allow read access to path |
 | `--allow-write <PATH>` | Allow write access to path |
+| `--deny-read <PATH>` | Deny read access to path (override allows) |
 
 > **Note on `--trace`:** The trace output shows sandbox violations from **all sandboxed processes** on the system, not just the current session. This is a limitation of macOS sandbox logging, which doesn't include session identifiers in denial logs. If you're running multiple `sx` sessions simultaneously, violations from all sessions will appear in each trace output.
 
@@ -226,24 +233,46 @@ System-wide defaults and custom profiles.
 
 ## Shell Integration
 
-Add to your shell config for prompt indicators and tab completion:
+Optional shell integration provides prompt indicators, tab completion, and aliases.
 
-**Zsh** (`~/.zshrc`):
+### Installation
+
+**Zsh** - Add to `~/.zshrc`:
 ```bash
+# If installed via Homebrew
+source $(brew --prefix)/share/sx/sx.zsh
+
+# Or from source
 source /path/to/sandbox-shell/shell/sx.zsh
 ```
 
-**Bash** (`~/.bashrc`):
+**Bash** - Add to `~/.bashrc`:
 ```bash
-source /path/to/sandbox-shell/shell/sx.bash
+source $(brew --prefix)/share/sx/sx.bash
+# Or: source /path/to/sandbox-shell/shell/sx.bash
 ```
 
-**Fish** (`~/.config/fish/conf.d/`):
+**Fish** - Copy to config:
 ```fish
-cp shell/sx.fish ~/.config/fish/conf.d/
+cp $(brew --prefix)/share/sx/sx.fish ~/.config/fish/conf.d/
 ```
 
-Provides: prompt indicator, tab completion, aliases (`sxo`, `sxl`, `sxr`).
+### Features
+
+**Prompt indicator** - Shows sandbox mode with color coding:
+- `[sx:offline]` (red) - Network blocked
+- `[sx:localhost]` (yellow) - Localhost only
+- `[sx:online]` (green) - Full network access
+
+**Aliases:**
+| Alias | Command | Description |
+|-------|---------|-------------|
+| `sxo` | `sx online` | Full network access |
+| `sxl` | `sx localhost` | Localhost only |
+| `sxr` | `sx online rust` | Rust with network |
+| `sxc` | `sx online gpg claude` | Claude Code with GPG |
+
+**Tab completion** - Complete profiles, options, and commands.
 
 ## Development
 

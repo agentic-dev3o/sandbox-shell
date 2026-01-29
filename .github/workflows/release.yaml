@@ -208,8 +208,9 @@ jobs:
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/sx dist/
+          cp -r shell dist/
           cd dist
-          tar czf sx-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz sx
+          tar czf sx-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz sx shell/
           shasum -a 256 sx-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz > sx-${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
 
       - name: Upload artifact
