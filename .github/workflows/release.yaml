@@ -116,11 +116,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate, test, security]
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: agentic-dev3o
+          repositories: sandbox-shell
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -152,8 +161,8 @@ jobs:
 
       - name: Commit version bump and changelog
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "dev3o[bot]"
+          git config user.email "${{ vars.APP_ID }}+dev3o[bot]@users.noreply.github.com"
           git add Cargo.toml Cargo.lock CHANGELOG.md
           git commit -m "chore(release): v${{ needs.validate.outputs.version }}"
           git tag -a "v${{ needs.validate.outputs.version }}" -m "Release v${{ needs.validate.outputs.version }}"
