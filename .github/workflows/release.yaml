@@ -285,27 +285,62 @@ jobs:
 
           echo "==> Updating formula to version ${VERSION}"
 
-          # Download source tarball and calculate SHA256
-          TARBALL_URL="https://github.com/${REPO}/archive/refs/tags/v${VERSION}.tar.gz"
-          echo "==> Downloading ${TARBALL_URL}"
-
-          HTTP_CODE=$(curl -sL -w "%{http_code}" -o /tmp/source.tar.gz "$TARBALL_URL")
+          # Download ARM64 binary and calculate SHA256
+          ARM64_URL="https://github.com/${REPO}/releases/download/v${VERSION}/sx-${VERSION}-aarch64-apple-darwin.tar.gz"
+          echo "==> Downloading ARM64 binary: ${ARM64_URL}"
+          HTTP_CODE=$(curl -sL -w "%{http_code}" -o /tmp/arm64.tar.gz "$ARM64_URL")
           if [ "$HTTP_CODE" != "200" ]; then
-            echo "Error: Failed to download tarball (HTTP ${HTTP_CODE})"
+            echo "Error: Failed to download ARM64 binary (HTTP ${HTTP_CODE})"
             exit 1
           fi
+          ARM64_SHA256=$(shasum -a 256 /tmp/arm64.tar.gz | cut -d' ' -f1)
+          echo "==> ARM64 SHA256: ${ARM64_SHA256}"
 
-          SHA256=$(shasum -a 256 /tmp/source.tar.gz | cut -d' ' -f1)
-          echo "==> SHA256: ${SHA256}"
+          # Download x86_64 binary and calculate SHA256
+          X86_64_URL="https://github.com/${REPO}/releases/download/v${VERSION}/sx-${VERSION}-x86_64-apple-darwin.tar.gz"
+          echo "==> Downloading x86_64 binary: ${X86_64_URL}"
+          HTTP_CODE=$(curl -sL -w "%{http_code}" -o /tmp/x86_64.tar.gz "$X86_64_URL")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Error: Failed to download x86_64 binary (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+          X86_64_SHA256=$(shasum -a 256 /tmp/x86_64.tar.gz | cut -d' ' -f1)
+          echo "==> x86_64 SHA256: ${X86_64_SHA256}"
 
           # Get current formula
           echo "==> Fetching current formula"
           gh api "repos/${TAP_REPO}/contents/Formula/sx.rb" --jq '.content' | base64 -d > /tmp/formula.rb
 
-          # Update version and SHA256 in formula
+          # Update formula
           echo "==> Updating formula"
-          sed -i -E "s|url \"https://github.com/${REPO}/archive/refs/tags/v[^\"]+\.tar\.gz\"|url \"${TARBALL_URL}\"|" /tmp/formula.rb
-          sed -i -E "s|sha256 \"[a-f0-9]+\"|sha256 \"${SHA256}\"|" /tmp/formula.rb
+
+          # Update version
+          sed -i -E "s|version \"[^\"]+\"|version \"${VERSION}\"|" /tmp/formula.rb
+
+          # Update ARM64 URL and SHA256 (in on_arm block)
+          sed -i -E "s|url \"https://github.com/${REPO}/releases/download/v[^/]+/sx-[^-]+-aarch64-apple-darwin\.tar\.gz\"|url \"${ARM64_URL}\"|" /tmp/formula.rb
+
+          # Update x86_64 URL and SHA256 (in on_intel block)
+          sed -i -E "s|url \"https://github.com/${REPO}/releases/download/v[^/]+/sx-[^-]+-x86_64-apple-darwin\.tar\.gz\"|url \"${X86_64_URL}\"|" /tmp/formula.rb
+
+          # Update SHA256 values - ARM64 first (appears first in file), then x86_64
+          # Use awk to update sha256 values in order of appearance
+          awk -v arm64="${ARM64_SHA256}" -v x86="${X86_64_SHA256}" '
+            /sha256 "[a-f0-9]+"/ {
+              if (!first_done) {
+                sub(/sha256 "[a-f0-9]+"/, "sha256 \"" arm64 "\"")
+                first_done = 1
+              } else {
+                sub(/sha256 "[a-f0-9]+"/, "sha256 \"" x86 "\"")
+              }
+            }
+            { print }
+          ' /tmp/formula.rb > /tmp/formula_updated.rb
+          mv /tmp/formula_updated.rb /tmp/formula.rb
+
+          # Show changes
+          echo "==> Updated formula:"
+          cat /tmp/formula.rb
 
           # Get current file SHA (needed for update)
           FILE_SHA=$(gh api "repos/${TAP_REPO}/contents/Formula/sx.rb" --jq '.sha')
