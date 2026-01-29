@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **ci:** Simplify homebrew formula update, remove version line
+
+
+
+### Bug Fixes
+
 - **ci:** Update homebrew script for binary formula
 
 
