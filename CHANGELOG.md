@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- Update zsh completions and README documentation (#10)
+
+
+### Documentation
+
+- Update installation to recommend Homebrew over Cargo
+
+
+
+### Bug Fixes
+
 - **ci:** Simplify homebrew formula update, remove version line
 
 

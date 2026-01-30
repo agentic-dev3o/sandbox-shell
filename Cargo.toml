@@ -1,6 +1,6 @@
 [package]
 name = "sx"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2021"
 authors = ["Pierre Tomasina"]
 description = "Lightweight sandbox for macOS development"
