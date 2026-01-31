@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **profile:** Allow Claude Code UID-suffixed tmp dirs and skills (#12)
+
+
+
+### Bug Fixes
+
 - Update zsh completions and README documentation (#10)
 
 
