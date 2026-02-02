@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **security:** Enable Claude OAuth refresh and tighten sandbox access
+
+
+### CI
+
+- Bump the github-actions group with 3 updates (#15)
+
+
+### Documentation
+
+- Rewrite for clarity and supply chain focus (#18)
+
+
+### Features
+
+- Add allow_list_dirs for Bun runtime compatibility (#17)
+
+
+### Deps
+
+- Bump clap from 4.5.54 to 4.5.56 in the rust-dependencies group (#14)
+
+
+
+### Bug Fixes
+
 - **profile:** Allow Claude Code UID-suffixed tmp dirs and skills (#12)
 
 
