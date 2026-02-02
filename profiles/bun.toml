@@ -12,11 +12,13 @@
 # (home directory contents) but NOT file contents. Use deny_read to protect
 # sensitive subdirectories like ~/pCloud or ~/.ssh.
 
-network_mode = "online"
-
 [filesystem]
 # Bun installation and cache
 allow_read = [
+    "~/.bun",
+]
+
+allow_write = [
     "~/.bun",
 ]
 
@@ -25,15 +27,6 @@ allow_read = [
 allow_list_dirs = [
     "/Users",
     "~",
-]
-
-# Deny access to sensitive directories even if parent listing is allowed
-# Add your sensitive paths here
-deny_read = [
-    "~/.ssh",
-    "~/.gnupg",
-    "~/.aws",
-    "~/.config/gh",
 ]
 
 [shell]

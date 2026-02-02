@@ -112,6 +112,7 @@ alias sxo='sx online'
 alias sxl='sx localhost'
 alias sxr='sx online rust'
 alias sxc='sx online claude'
+alias sxb='sx online bun'
 "#;
 
 const BASH_INTEGRATION: &str = r#"# sx.bash - Bash integration for sandbox CLI
@@ -159,6 +160,7 @@ alias sxo='sx online'
 alias sxl='sx localhost'
 alias sxr='sx online rust'
 alias sxc='sx online claude'
+alias sxb='sx online bun'
 "#;
 
 const FISH_INTEGRATION: &str = r#"# sx.fish - Fish integration for sandbox CLI
@@ -216,6 +218,7 @@ alias sxo 'sx online'
 alias sxl 'sx localhost'
 alias sxr 'sx online rust'
 alias sxc 'sx online claude'
+alias sxb 'sx online bun'
 "#;
 
 #[cfg(test)]
