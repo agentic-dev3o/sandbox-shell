@@ -81,6 +81,7 @@ fn fs_sandbox_params(working_dir: PathBuf) -> SandboxParams {
         ],
         deny_read: vec![],
         allow_write: vec![],
+        allow_list_dirs: vec![],
         raw_rules: None,
     }
 }
@@ -256,6 +257,7 @@ fn network_sandbox_params(working_dir: PathBuf, mode: NetworkMode) -> SandboxPar
         ],
         deny_read: vec![],
         allow_write: vec![],
+        allow_list_dirs: vec![],
         raw_rules: None,
     }
 }

@@ -73,6 +73,8 @@ pub struct ProfileFilesystem {
     pub allow_read: Vec<String>,
     pub deny_read: Vec<String>,
     pub allow_write: Vec<String>,
+    /// Paths to allow directory listing only (readdir), not file contents
+    pub allow_list_dirs: Vec<String>,
 }
 
 /// Profile shell configuration
@@ -99,6 +101,7 @@ pub enum BuiltinProfile {
     Rust,
     Claude,
     Gpg,
+    Bun,
 }
 
 impl BuiltinProfile {
@@ -111,6 +114,7 @@ impl BuiltinProfile {
             "rust" => Some(Self::Rust),
             "claude" => Some(Self::Claude),
             "gpg" => Some(Self::Gpg),
+            "bun" => Some(Self::Bun),
             _ => None,
         }
     }
@@ -124,6 +128,7 @@ impl BuiltinProfile {
             Self::Rust => "rust",
             Self::Claude => "claude",
             Self::Gpg => "gpg",
+            Self::Bun => "bun",
         }
     }
 
@@ -140,6 +145,7 @@ impl BuiltinProfile {
             Self::Rust => include_str!("../../profiles/rust.toml"),
             Self::Claude => include_str!("../../profiles/claude.toml"),
             Self::Gpg => include_str!("../../profiles/gpg.toml"),
+            Self::Bun => include_str!("../../profiles/bun.toml"),
         };
         toml::from_str(toml_str).map_err(|e| ProfileError::InvalidBuiltin {
             name: self.name(),
@@ -256,6 +262,10 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
         merge_unique(
             &mut result.filesystem.allow_write,
             &profile.filesystem.allow_write,
+        );
+        merge_unique(
+            &mut result.filesystem.allow_list_dirs,
+            &profile.filesystem.allow_list_dirs,
         );
 
         // Shell: merge unique env vars

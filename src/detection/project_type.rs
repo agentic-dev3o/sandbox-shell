@@ -10,6 +10,7 @@ pub enum ProjectType {
     Python,
     Rust,
     Go,
+    Bun,
 }
 
 impl ProjectType {
@@ -20,6 +21,7 @@ impl ProjectType {
             ProjectType::Python => "python",
             ProjectType::Rust => "rust",
             ProjectType::Go => "go",
+            ProjectType::Bun => "bun",
         }
     }
 
@@ -31,6 +33,7 @@ impl ProjectType {
     /// Get all known project types
     fn all() -> &'static [ProjectType] {
         &[
+            ProjectType::Bun, // Check Bun first (more specific than Node)
             ProjectType::Node,
             ProjectType::Python,
             ProjectType::Rust,
@@ -45,6 +48,7 @@ impl ProjectType {
             ProjectType::Python => &["requirements.txt", "pyproject.toml", "setup.py"],
             ProjectType::Rust => &["Cargo.toml"],
             ProjectType::Go => &["go.mod"],
+            ProjectType::Bun => &["bun.lockb", "bunfig.toml"],
         }
     }
 }
@@ -86,6 +90,7 @@ mod tests {
         assert_eq!(ProjectType::Python.as_str(), "python");
         assert_eq!(ProjectType::Rust.as_str(), "rust");
         assert_eq!(ProjectType::Go.as_str(), "go");
+        assert_eq!(ProjectType::Bun.as_str(), "bun");
     }
 
     #[test]
@@ -95,5 +100,7 @@ mod tests {
         assert!(ProjectType::Python.markers().contains(&"pyproject.toml"));
         assert!(ProjectType::Rust.markers().contains(&"Cargo.toml"));
         assert!(ProjectType::Go.markers().contains(&"go.mod"));
+        assert!(ProjectType::Bun.markers().contains(&"bun.lockb"));
+        assert!(ProjectType::Bun.markers().contains(&"bunfig.toml"));
     }
 }

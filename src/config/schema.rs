@@ -74,6 +74,11 @@ pub struct FilesystemConfig {
     pub deny_read: Vec<String>,
     /// Paths to always allow writing (beyond project dir)
     pub allow_write: Vec<String>,
+    /// Paths to allow directory listing only (readdir), not file contents.
+    /// Uses Seatbelt `literal` filter - only the exact directory is listable,
+    /// not its children. Useful for runtimes like Bun that need to scan
+    /// parent directories during module resolution.
+    pub allow_list_dirs: Vec<String>,
 }
 
 /// Shell environment configuration
