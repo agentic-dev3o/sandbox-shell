@@ -98,6 +98,10 @@ pub struct SandboxParams {
     pub deny_read: Vec<PathBuf>,
     /// Paths to allow writing (restricted by default)
     pub allow_write: Vec<PathBuf>,
+    /// Paths to allow directory listing only (readdir), not file contents.
+    /// Uses Seatbelt `literal` filter - allows listing a directory's entries
+    /// without granting access to files or subdirectories within it.
+    pub allow_list_dirs: Vec<PathBuf>,
     /// Raw seatbelt rules to include verbatim
     pub raw_rules: Option<String>,
 }
@@ -157,6 +161,22 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
         }
     }
     profile.push('\n');
+
+    // Directory listing only (readdir) - uses literal filter
+    // Allows listing directory contents without reading files or subdirectories.
+    // Useful for runtimes like Bun that scan parent directories during module resolution.
+    if !params.allow_list_dirs.is_empty() {
+        profile.push_str("; Directory listing only (readdir without file access)\n");
+        for path in &params.allow_list_dirs {
+            let p = path.display().to_string();
+            let validated = validate_seatbelt_path(&p)?;
+            // Use literal filter - only matches the exact path, not children
+            profile.push_str(&format!(
+                "(allow file-read-data (literal \"{validated}\"))\n"
+            ));
+        }
+        profile.push('\n');
+    }
 
     // Deny sensitive paths (overrides allow_read for nested sensitive paths)
     // Uses last-match-wins: deny after allow takes precedence
@@ -531,5 +551,72 @@ mod tests {
         assert!(profile.contains("(allow network-inbound (from ip \"localhost:*\"))"));
         // seatbelt doesn't accept IP addresses, only "localhost" or "*"
         assert!(!profile.contains("127.0.0.1"));
+    }
+
+    // === Directory Listing (allow_list_dirs) Tests ===
+
+    #[test]
+    fn test_allow_list_dirs_uses_literal() {
+        let params = SandboxParams {
+            allow_list_dirs: vec![PathBuf::from("/Users")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        // Should use literal filter (exact match only), not subpath
+        assert!(
+            profile.contains(r#"(allow file-read-data (literal "/Users"))"#),
+            "allow_list_dirs should use literal filter, got:\n{}",
+            profile
+        );
+        // Should NOT use subpath (which would allow reading all contents)
+        assert!(
+            !profile.contains(r#"(allow file-read* (subpath "/Users"))"#),
+            "allow_list_dirs should NOT use subpath filter"
+        );
+    }
+
+    #[test]
+    fn test_allow_list_dirs_multiple_paths() {
+        let params = SandboxParams {
+            allow_list_dirs: vec![PathBuf::from("/Users"), PathBuf::from("/Users/testuser")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(profile.contains(r#"(allow file-read-data (literal "/Users"))"#));
+        assert!(profile.contains(r#"(allow file-read-data (literal "/Users/testuser"))"#));
+    }
+
+    #[test]
+    fn test_allow_list_dirs_with_deny_read() {
+        // Verify deny_read still takes precedence over allow_list_dirs
+        let params = SandboxParams {
+            allow_list_dirs: vec![PathBuf::from("/Users/testuser")],
+            deny_read: vec![PathBuf::from("/Users/testuser/secret")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params).unwrap();
+
+        let list_pos = profile
+            .find(r#"(allow file-read-data (literal "/Users/testuser"))"#)
+            .expect("allow_list_dirs rule should exist");
+        let deny_pos = profile
+            .find(r#"(deny file-read* (subpath "/Users/testuser/secret"))"#)
+            .expect("deny rule should exist");
+
+        // deny_read comes after allow_list_dirs (last-match-wins)
+        assert!(
+            deny_pos > list_pos,
+            "deny rules must come after allow_list_dirs for Seatbelt last-match-wins semantics"
+        );
+    }
+
+    #[test]
+    fn test_allow_list_dirs_section_comment() {
+        let params = SandboxParams {
+            allow_list_dirs: vec![PathBuf::from("/Users")],
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(profile.contains("; Directory listing only"));
     }
 }

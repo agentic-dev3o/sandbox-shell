@@ -67,6 +67,15 @@ pub fn explain(args: &Args) -> Result<()> {
         println!();
     }
 
+    // Directory listing only paths
+    if !context.params.allow_list_dirs.is_empty() {
+        println!("Directory Listing Only (readdir without file access):");
+        for path in &context.params.allow_list_dirs {
+            println!("  ~ {}", path.display());
+        }
+        println!();
+    }
+
     // Allowed write paths
     if !context.params.allow_write.is_empty() {
         println!("Allowed Write Paths:");
@@ -260,6 +269,20 @@ fn build_sandbox_params(
     let mut allow_read = collect_allow_read_paths(config, profile, &args.allow_read);
     let mut deny_read = collect_deny_read_paths(config, profile, &args.deny_read);
     let mut allow_write = collect_allow_write_paths(config, profile, &args.allow_write);
+    let mut allow_list_dirs = collect_allow_list_dirs_paths(config, profile);
+
+    // If allow_list_dirs is configured, add all parent directories of working_dir
+    // This is needed for runtimes like Bun that scan ALL parent directories
+    if !allow_list_dirs.is_empty() {
+        let mut parent = working_dir.parent();
+        while let Some(p) = parent {
+            let path_str = p.to_string_lossy().to_string();
+            if !path_str.is_empty() && path_str != "/" && !allow_list_dirs.contains(&path_str) {
+                allow_list_dirs.push(path_str);
+            }
+            parent = p.parent();
+        }
+    }
 
     // Expand all paths
     allow_read = expand_paths(&allow_read)
@@ -274,6 +297,10 @@ fn build_sandbox_params(
         .into_iter()
         .map(|p| p.to_string_lossy().to_string())
         .collect();
+    allow_list_dirs = expand_paths(&allow_list_dirs)
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
 
     // Build raw rules if present
     let raw_rules = profile.seatbelt.as_ref().and_then(|s| s.raw.clone());
@@ -285,6 +312,7 @@ fn build_sandbox_params(
         allow_read: allow_read.into_iter().map(PathBuf::from).collect(),
         deny_read: deny_read.into_iter().map(PathBuf::from).collect(),
         allow_write: allow_write.into_iter().map(PathBuf::from).collect(),
+        allow_list_dirs: allow_list_dirs.into_iter().map(PathBuf::from).collect(),
         raw_rules,
     }
 }
@@ -335,6 +363,14 @@ fn collect_allow_write_paths(config: &Config, profile: &Profile, cli: &[String])
     paths
 }
 
+/// Collect allow-list-dirs paths from config and profile (directory listing only)
+fn collect_allow_list_dirs_paths(config: &Config, profile: &Profile) -> Vec<String> {
+    let mut paths = Vec::new();
+    paths.extend(config.filesystem.allow_list_dirs.iter().cloned());
+    paths.extend(profile.filesystem.allow_list_dirs.iter().cloned());
+    paths
+}
+
 /// Generate the default .sandbox.toml template
 fn generate_config_template() -> &'static str {
     r#"# .sandbox.toml
@@ -361,6 +397,12 @@ allow_write = []
 
 # Paths to deny even if globally allowed
 deny_read = []
+
+# Directories to allow listing (readdir) but not file access inside.
+# Useful for runtimes like Bun that scan parent directories.
+# Example: ["/Users", "~"] allows listing these directories' contents
+# without reading files or subdirectories within them.
+allow_list_dirs = []
 
 [shell]
 # Additional environment variables to pass through

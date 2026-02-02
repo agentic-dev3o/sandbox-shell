@@ -1,0 +1,37 @@
+# Bun runtime profile
+#
+# Enables directory listing on parent directories required by Bun's
+# module resolver during initialization. Bun uses readdir() on parent
+# directories (up to /Users and ~/) to pre-populate its directory cache
+# for fast module resolution.
+#
+# This profile allows listing directory contents without granting access
+# to read files or subdirectories within them.
+#
+# Security note: This exposes directory names in /Users (usernames) and ~/
+# (home directory contents) but NOT file contents. Use deny_read to protect
+# sensitive subdirectories like ~/pCloud or ~/.ssh.
+
+[filesystem]
+# Bun installation and cache
+allow_read = [
+    "~/.bun",
+]
+
+allow_write = [
+    "~/.bun",
+]
+
+# Allow listing parent directories for Bun's module resolution
+# Uses Seatbelt 'literal' filter - only the exact directory is listable
+allow_list_dirs = [
+    "/Users",
+    "~",
+]
+
+[shell]
+pass_env = [
+    "BUN_INSTALL",
+    "NODE_ENV",
+    "npm_config_registry",
+]
