@@ -171,7 +171,9 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
             let p = path.display().to_string();
             let validated = validate_seatbelt_path(&p)?;
             // Use literal filter - only matches the exact path, not children
-            profile.push_str(&format!("(allow file-read-data (literal \"{validated}\"))\n"));
+            profile.push_str(&format!(
+                "(allow file-read-data (literal \"{validated}\"))\n"
+            ));
         }
         profile.push('\n');
     }
@@ -576,10 +578,7 @@ mod tests {
     #[test]
     fn test_allow_list_dirs_multiple_paths() {
         let params = SandboxParams {
-            allow_list_dirs: vec![
-                PathBuf::from("/Users"),
-                PathBuf::from("/Users/testuser"),
-            ],
+            allow_list_dirs: vec![PathBuf::from("/Users"), PathBuf::from("/Users/testuser")],
             ..Default::default()
         };
         let profile = generate_seatbelt_profile(&params).unwrap();
