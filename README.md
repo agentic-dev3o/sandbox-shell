@@ -4,8 +4,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://developer.apple.com/documentation/security/app_sandbox)
 
-> **TL;DR:** Run untrusted code without risking supply chain attacks. That sketchy npm package can't steal your SSH keys or AWS credentials. Uses macOS Seatbelt (`sandbox-exec`) with deny-by-default permissions.
-
 A lightweight Rust CLI that wraps shell commands in macOS Seatbelt sandboxes. That npm package you just installed? It can't read your `~/.ssh` keys or `~/.aws` credentials. Can't steal what you can't see.
 
 Supply chain attacks are everywhere. A single compromised dependency tries to exfiltrate your secrets? It can't—filesystem is deny-by-default. Your credentials aren't readable, even with network enabled. No containers, no VMs, just native macOS sandboxing.
@@ -120,7 +118,7 @@ allow_write = [
 ]
 ```
 
-**Ghostty users:** add that terminfo path or you'll get display issues. Ask me how I know.
+**Ghostty users:** add that terminfo path or you'll get display issues.
 
 ### Project Config (`.sandbox.toml`)
 
