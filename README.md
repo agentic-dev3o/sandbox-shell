@@ -4,38 +4,74 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://developer.apple.com/documentation/security/app_sandbox)
 
-> **TL;DR:** Run untrusted code without exposing your SSH keys, AWS credentials, or personal files. Uses macOS Seatbelt (`sandbox-exec`) with deny-by-default permissions.
+A lightweight Rust CLI that wraps shell commands in macOS Seatbelt sandboxes. That npm package you just installed? It can't read your `~/.ssh` keys or `~/.aws` credentials. Can't steal what you can't see.
 
-A lightweight Rust CLI that wraps shell commands and terminals in macOS Seatbelt sandboxes. Protect your system from malicious npm packages, supply chain attacks, compromised dependencies, and untrusted build scripts.
-
-**Key features:**
-- **Credential protection** - Blocks access to `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`
-- **Network isolation** - Offline by default, localhost-only, or full access
-- **Filesystem isolation** - Deny-by-default reads, scoped writes
-- **Claude Code integration** - Safe agentic loops with `--dangerously-skip-permissions`
-- **Zero overhead** - Native macOS sandbox, no containers or VMs
+Supply chain attacks are everywhere. A single compromised dependency tries to exfiltrate your secrets? It can't—filesystem is deny-by-default. Your credentials aren't readable, even with network enabled. No containers, no VMs, just native macOS sandboxing.
 
 ## Quick Start
 
 ```bash
-# Install via Homebrew
 brew tap agentic-dev3o/sx
 brew install sx
 
-# Run commands in an isolated sandbox (network blocked, credentials protected)
-sx -- bun lint
+# That's it. Now run untrusted code:
+sx -- npm run build
 sx -- cargo test
 sx -- ./build.sh
 
-# Start an interactive sandboxed shell
+# Or start an interactive sandboxed shell
 sx
 ```
 
-That's it. Your credentials (`~/.ssh`, `~/.aws`, `~/.gnupg`) and personal files are protected from malicious scripts.
+Your secrets stay secret. Malicious postinstall scripts get nothing.
+
+## Profiles
+
+Profiles stack. Combine them: `sx online rust -- cargo build`
+
+| Profile | What it does |
+|---------|--------------|
+| `base` | Minimal sandbox (always included) |
+| `online` | Full network access |
+| `localhost` | 127.0.0.1 only |
+| `rust` | Cargo/rustup paths |
+| `bun` | `~/.bun` + parent directory listing for module resolution |
+| `claude` | Claude Code paths (includes `online`) |
+| `gpg` | GPG signing |
+
+### Examples
+
+```bash
+# Bun
+sx bun -- bun install           # Offline, from cache
+sx bun online -- bun install    # Download deps
+
+# Rust
+sx rust -- cargo test           # Offline tests
+sx rust online -- cargo build   # Download crates
+
+# Claude Code - the whole point
+sx claude -- claude --dangerously-skip-permissions --continue
+
+# Interactive shell with network
+sx online
+```
+
+## Claude Code Integration
+
+Claude Code has a built-in sandbox mode. Sounds great, except it allows **read-only access to your entire filesystem**. A compromised dependency can still read your `~/.ssh` keys, `~/.aws` credentials, and exfiltrate them.
+
+`sx` is deny-by-default. Sensitive paths are blocked from *reading*, not just writing. Malicious code can't steal what it can't see.
+
+```bash
+sx claude -- claude --dangerously-skip-permissions --continue
+```
+
+Claude runs agentic, no permission prompts. Supply chain attacks in dependencies? They get sandboxed too. That's the setup I use.
 
 ## Installation
 
-### Homebrew (Recommended)
+### Homebrew
 
 ```bash
 brew tap agentic-dev3o/sx
@@ -44,70 +80,66 @@ brew install sx
 
 ### From Source
 
-For development or if you want full control over the build:
-
 ```bash
 git clone https://github.com/agentic-dev3o/sandbox-shell.git
 cd sandbox-shell
 cargo install --path .
 ```
 
-Or build manually:
+Requires macOS and Rust 1.70+.
 
-```bash
-cargo build --release
-sudo cp target/release/sx /usr/local/bin/
+## Configuration
+
+### Global Config (`~/.config/sx/config.toml`)
+
+Your personal paths go here. Terminal, shell prompt, directory jumper…
+
+```toml
+[filesystem]
+allow_read = [
+    # Shell prompt
+    "~/.config/starship.toml",
+    "~/.cache/starship/",
+
+    # zoxide
+    "~/.local/share/zoxide/",
+
+    # Ghostty users - you need this or terminal breaks in sandbox
+    "/Applications/Ghostty.app/Contents/Resources/terminfo",
+
+    # Claude Code plugins
+    # "~/projects/my-plugins/",
+]
+
+allow_write = [
+    "~/.local/share/zoxide/",
+    "~/Library/Application Support/zoxide/",
+    "~/.cache/",
+]
 ```
 
-### Verify
+**Ghostty users:** add that terminfo path or you'll get display issues.
+
+### Project Config (`.sandbox.toml`)
+
+Per-project overrides:
 
 ```bash
-sx --version
-sx --help
+sx --init
 ```
 
-**Requirements:** macOS (uses Apple's Seatbelt sandbox). Building from source requires Rust 1.70+.
+```toml
+[sandbox]
+profiles = ["rust"]
 
-## Use Cases
+[filesystem]
+allow_write = ["/tmp/build"]
 
-- **npm/bun/yarn projects** - Protect against malicious postinstall scripts
-- **Cloning untrusted repos** - Safely explore code without risk
-- **Running build scripts** - Isolate `make`, `./configure`, custom scripts
-- **CI/CD local testing** - Reproduce pipeline isolation locally
-- **Claude Code / AI agents** - Safe agentic loops without exposing credentials
-- **Security research** - Analyze suspicious code safely
-
-## Why Use sx?
-
-When you run `npm install` or clone an untrusted repo, malicious code can:
-- Steal your SSH keys and AWS credentials
-- Access your personal documents
-- Exfiltrate data over the network
-
-`sx` prevents this by running commands in a sandbox that blocks access to sensitive paths and network by default.
-
-### Why sx Instead of Claude's Native Sandbox?
-
-Claude Code offers a built-in sandbox mode, but it allows **read-only access to your entire filesystem** by default. This means a compromised npm package or malicious build script can still read your `~/.ssh` keys, `~/.aws` credentials, and other secrets.
-
-`sx` takes a **deny-by-default** approach: sensitive paths are blocked from reading, not just writing.
-
-This makes `sx` ideal for **agentic loops** where you want Claude to run autonomously:
-
-```bash
-# Run Claude Code with dangerous permissions inside sx sandbox
-sx online claude -- claude --dangerously-skip-permissions
-
-# Or start a sandboxed shell for an agentic session
-sx online claude
+[shell]
+pass_env = ["NODE_ENV", "DEBUG"]
 ```
 
-With this setup:
-- Claude can execute commands without permission prompts (agentic loop)
-- Malicious code cannot read your SSH keys, AWS credentials, or personal files
-- Network access is controlled (offline by default, or scoped with `online`/`localhost`)
-
-This is the best of both worlds: full automation for trusted AI workflows, with protection against supply chain attacks in dependencies.
+Custom profiles go in `~/.config/sx/profiles/name.toml`.
 
 ## Usage
 
@@ -115,24 +147,22 @@ This is the best of both worlds: full automation for trusted AI workflows, with 
 sx [OPTIONS] [PROFILES]... [-- <COMMAND>...]
 ```
 
-### Common Patterns
-
 ```bash
-# Offline sandbox (default) - run untrusted code safely
-sx -- npm run build         # Build with cached deps
-sx -- ./scripts/setup.sh    # Run untrusted scripts
-sx rust -- cargo test       # Run tests isolated
+# Offline (default)
+sx -- npm run build
+sx -- ./scripts/setup.sh
 
 # Localhost only - for dev servers
-sx localhost -- npm start   # Allows 127.0.0.1 only
+sx localhost -- npm start
 
-# Online - when network is required
-sx online rust -- cargo build   # Download crates
+# Online
+sx online rust -- cargo audit
+sx bun online -- bun install
 
-# Debug what's being blocked
-sx --trace -- cargo build   # Real-time violation log
-sx --explain rust           # Show what would be allowed
-sx --dry-run rust           # Preview sandbox profile
+# Debug what's blocked
+sx --trace -- cargo build       # Real-time violation log
+sx --explain rust               # Show allowed/denied
+sx --dry-run rust               # Preview seatbelt profile
 ```
 
 ### Options
@@ -140,163 +170,113 @@ sx --dry-run rust           # Preview sandbox profile
 | Option | Description |
 |--------|-------------|
 | `-v, --verbose` | Show sandbox configuration |
-| `-d, --debug` | Enable debug mode (log all denials) |
-| `-t, --trace` | Trace sandbox violations in real-time (see note below) |
-| `--trace-file <PATH>` | Write trace output to file instead of stderr |
-| `-n, --dry-run` | Print sandbox profile without executing |
-| `-c, --config <PATH>` | Use specific config file |
-| `--no-config` | Ignore all config files |
-| `--explain` | Show what would be allowed/denied |
-| `--init` | Create `.sandbox.toml` in current directory |
-| `--offline` | Block all network (default) |
-| `--online` | Allow all network |
-| `--localhost` | Allow localhost only |
-| `--allow-read <PATH>` | Allow read access to path |
-| `--allow-write <PATH>` | Allow write access to path |
-| `--deny-read <PATH>` | Deny read access to path (override allows) |
+| `-d, --debug` | Log all denials |
+| `-t, --trace` | Real-time violation stream |
+| `--trace-file <PATH>` | Write trace to file |
+| `-n, --dry-run` | Print profile, don't execute |
+| `-c, --config <PATH>` | Use specific config |
+| `--no-config` | Ignore all configs |
+| `--explain` | Show what's allowed/denied |
+| `--init` | Create `.sandbox.toml` |
+| `--offline` | Block network (default) |
+| `--online` | Allow network |
+| `--localhost` | 127.0.0.1 only |
+| `--allow-read <PATH>` | Allow read |
+| `--allow-write <PATH>` | Allow write |
+| `--deny-read <PATH>` | Deny read (overrides allows) |
 
-> **Note on `--trace`:** The trace output shows sandbox violations from **all sandboxed processes** on the system, not just the current session. This is a limitation of macOS sandbox logging, which doesn't include session identifiers in denial logs. If you're running multiple `sx` sessions simultaneously, violations from all sessions will appear in each trace output.
-
-## Profiles
-
-Profiles are composable configurations that stack together:
-
-| Profile | Description |
-|---------|-------------|
-| `base` | Minimal sandbox (always included) |
-| `online` | Full network access |
-| `localhost` | Localhost-only network |
-| `rust` | Rust/Cargo toolchain |
-| `claude` | Claude Code support |
-| `gpg` | GPG signing support |
-
-Combine profiles: `sx online rust -- cargo build`
-
-## Configuration
-
-### Project Config (`.sandbox.toml`)
-
-Create a config in your project root:
-
-```bash
-sx --init
-```
-
-Example:
-
-```toml
-[sandbox]
-profiles = ["rust"]
-# network = "localhost"
-
-[filesystem]
-allow_write = ["/tmp/build"]
-
-[network]
-allow_domains = ["api.example.com"]
-
-[shell]
-pass_env = ["NODE_ENV", "DEBUG"]
-```
-
-### Global Config (`~/.config/sx/config.toml`)
-
-System-wide defaults and custom profiles.
+| `--trace` shows violations from *all* sandboxed processes on the system, not just yours. macOS limitation.
 
 ## Security Model
 
-### What's Protected by Default
+### Always Denied (even if you allow `~`)
 
-| Path | Description |
-|------|-------------|
+These paths are explicitly blocked. Even if your config allows the home directory, these stay protected:
+
+| Path | What |
+|------|------|
 | `~/.ssh` | SSH keys |
 | `~/.aws` | AWS credentials |
-| `~/.gnupg` | GPG keys |
-| `~/.config/gh` | GitHub CLI tokens |
-| `~/.netrc` | Network credentials |
 | `~/.docker/config.json` | Docker credentials |
 | `~/Documents`, `~/Desktop`, `~/Downloads` | Personal files |
 
+Everything else (`~/.config/gh`, `~/.netrc`, `~/.gnupg`…) is blocked by deny-by-default. Use profiles like `gpg` to allow specific paths when needed.
+
 ### Network Modes
 
-| Mode | Flag | Description |
-|------|------|-------------|
-| Offline | (default) | All network blocked |
-| Localhost | `localhost` | Only 127.0.0.1 allowed |
-| Online | `online` | Full network access |
+| Mode | Flag | Effect |
+|------|------|--------|
+| Offline | (default) | All blocked |
+| Localhost | `localhost` | 127.0.0.1 only |
+| Online | `online` | Full access |
 
 ### How It Works
 
-1. **Reads:** Denied by default. Only system paths (`/usr`, `/bin`, `/Library`, `/System`) allowed.
-2. **Writes:** Denied by default. Only working directory and `/tmp` allowed.
-3. **Network:** Blocked by default. Use `online` or `localhost` profiles.
+**Reads:** denied by default. Only `/usr`, `/bin`, `/Library`, `/System`.
+
+**Writes:** denied by default. Only working directory and `/tmp`.
+
+**Network:** blocked by default.
+
+## Use Cases
+
+Supply chain attacks are the main threat. That one compromised package in your dependency tree running a postinstall script, exfiltrating `~/.aws` to some random server. Or worse, dropping malware.
+
+`sx` makes npm/bun/yarn safe. Also: untrusted repos, random build scripts, CI/CD isolation locally, Claude Code agentic loops, security research…
 
 ## Shell Integration
 
-Optional shell integration provides prompt indicators, tab completion, and aliases.
+Prompt indicators, tab completion, aliases.
 
-### Installation
-
-**Zsh** - Add to `~/.zshrc`:
+**Zsh** (`~/.zshrc`):
 ```bash
-# If installed via Homebrew
 source $(brew --prefix)/share/sx/sx.zsh
-
-# Or from source
-source /path/to/sandbox-shell/shell/sx.zsh
 ```
 
-**Bash** - Add to `~/.bashrc`:
+**Bash** (`~/.bashrc`):
 ```bash
 source $(brew --prefix)/share/sx/sx.bash
-# Or: source /path/to/sandbox-shell/shell/sx.bash
 ```
 
-**Fish** - Copy to config:
+**Fish**:
 ```fish
 cp $(brew --prefix)/share/sx/sx.fish ~/.config/fish/conf.d/
 ```
 
-### Features
+### Prompt Colors
 
-**Prompt indicator** - Shows sandbox mode with color coding:
-- `[sx:offline]` (red) - Network blocked
-- `[sx:localhost]` (yellow) - Localhost only
-- `[sx:online]` (green) - Full network access
+- `[sx:offline]` red - network blocked
+- `[sx:localhost]` yellow - localhost only
+- `[sx:online]` green - full network
 
-**Aliases:**
-| Alias | Command | Description |
-|-------|---------|-------------|
-| `sxo` | `sx online` | Full network access |
-| `sxl` | `sx localhost` | Localhost only |
-| `sxr` | `sx online rust` | Rust with network |
-| `sxc` | `sx online gpg claude` | Claude Code with GPG |
+### Aliases
 
-**Tab completion** - Complete profiles, options, and commands.
+| Alias | Command |
+|-------|---------|
+| `sxo` | `sx online` |
+| `sxl` | `sx localhost` |
+| `sxb` | `sx bun online` |
+| `sxr` | `sx online rust` |
+| `sxc` | `sx online gpg claude` |
+
+## Comparison
+
+| Tool | Platform | Overhead | Credential Protection | Network Control |
+|------|----------|----------|----------------------|-----------------|
+| **sx** | macOS | None | ✅ Deny-by-default | ✅ Offline/localhost/online |
+| Docker | Cross-platform | Container runtime | ⚠️ Manual | ⚠️ Manual |
+| Firejail | Linux | Minimal | ✅ Profiles | ✅ Profiles |
+| Claude sandbox | macOS | None | ❌ Read-only everywhere | ❌ None |
+| VM | Cross-platform | Heavy | ✅ Full | ✅ Full |
 
 ## Development
 
 ```bash
-cargo test              # Run tests
-cargo build             # Debug build
-cargo run -- --help     # Run from source
+cargo fmt
+cargo test
+cargo build
+cargo run -- --help
 ```
-
-## Comparison with Alternatives
-
-| Tool | Platform | Overhead | Credential Protection | Network Control |
-|------|----------|----------|----------------------|-----------------|
-| **sx** | macOS | None (native) | ✅ Deny-by-default | ✅ Offline/localhost/online |
-| Docker | Cross-platform | Container runtime | ⚠️ Manual config | ⚠️ Manual config |
-| Firejail | Linux | Minimal | ✅ Profiles | ✅ Profiles |
-| Claude sandbox | macOS | None | ❌ Read-only everywhere | ❌ No control |
-| VM (Parallels, etc.) | Cross-platform | Heavy | ✅ Full isolation | ✅ Full isolation |
-
-**When to use sx:**
-- You're on macOS and want native performance
-- You need to protect credentials from untrusted code
-- You want fine-grained network control (offline by default)
-- You're running Claude Code in agentic mode
 
 ## License
 
@@ -304,8 +284,4 @@ MIT
 
 ## Contributing
 
-Contributions welcome! Please read the security model before submitting PRs that modify sandbox behavior.
-
----
-
-**Keywords:** macOS sandbox, seatbelt, sandbox-exec, secure shell, isolated terminal, credential protection, supply chain security, npm security, Claude Code sandbox, agentic AI security, developer security tools
+PRs welcome. Read the security model before touching sandbox behavior.

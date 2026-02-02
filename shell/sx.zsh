@@ -29,6 +29,7 @@ _sx() {
         'online:Full network access'
         'localhost:Localhost network only'
         'rust:Rust/Cargo toolchain'
+        'bun:Bun runtime'
         'claude:Claude Code support'
         'gpg:GPG signing support'
     )
@@ -76,5 +77,6 @@ compdef _sx sx
 # Aliases for common patterns
 alias sxo='sx online'              # Online network access
 alias sxl='sx localhost'           # Localhost only
+alias sxb='sx bun online'          # Bun with network
 alias sxr='sx online rust'         # Rust with network
 alias sxc='sx online gpg claude'   # Claude Code with GPG signing

@@ -1,82 +1,101 @@
 # Profiles
 
-Profiles are composable sandbox configurations that can be combined to create the right security posture for your project.
+Profiles are composable sandbox configs. Stack them: `sx online rust -- cargo build`
 
 ## Built-in Profiles
 
 ### base
 
-The foundational profile included by default. Provides:
-- Read access to system directories (`/usr`, `/bin`, `/sbin`, `/opt`)
-- Read access to temp directories (`/tmp`, `/var/folders`)
-- Denies access to sensitive directories (`~/.ssh`, `~/.aws`, `~/.gnupg`)
-- Basic environment variables (`TERM`, `PATH`, `HOME`, `USER`)
+Always included (unless `inherit_base = false`). Provides:
+- Read access to system directories (`/usr`, `/bin`, `/sbin`, `/Library`, `/System`)
+- Read access to shell configs (`~/.zshrc`, `~/.bashrc`…)
+- Write access to `/tmp` and session temp dir
+- Basic env vars (`TERM`, `PATH`, `HOME`, `USER`, `SHELL`)
+
+**Always denied** (even if you allow `~`):
+- `~/.ssh`
+- `~/.aws`
+- `~/.docker/config.json`
+- `~/Documents`, `~/Desktop`, `~/Downloads`
 
 ### online
 
-Enables full network access.
+Full network access.
 
 ```bash
-sx --profile online
+sx online -- curl https://example.com
 ```
 
 ### localhost
 
-Allows network connections only to localhost (127.0.0.1).
+127.0.0.1 only. For dev servers.
 
 ```bash
-sx --profile localhost
+sx localhost -- npm start
 ```
 
 ### rust
 
-For Rust projects:
-- Read access: `~/.cargo`, `~/.rustup`
-- Write access: `~/.cargo/registry`
-- Network domains: `crates.io`, `static.crates.io`
+Rust/Cargo toolchain:
+- Read/write: `~/.cargo`, `~/.rustup`
+- Env: `CARGO_HOME`, `RUSTUP_HOME`
 
 ```bash
-sx --profile rust
+sx rust online -- cargo build
+```
+
+### bun
+
+Bun runtime:
+- Read/write: `~/.bun`
+- Parent directory listing for module resolution (`/Users`, `~`)
+- Env: `BUN_INSTALL`, `NODE_ENV`
+
+```bash
+sx bun online -- bun install
 ```
 
 ### claude
 
-For Claude Code projects:
-- Read/Write access: `~/.claude`
-- Network domains: `api.anthropic.com`
-- Passes: `ANTHROPIC_API_KEY`
+Claude Code:
+- Read/write: `~/.claude`, `~/.claude.json`
+- Includes `online` network
+- Env: `ANTHROPIC_API_KEY`
 
 ```bash
-sx --profile claude
+sx claude -- claude --dangerously-skip-permissions --continue
 ```
 
 ### gpg
 
-For GPG signing:
-- Read/Write access: `~/.gnupg`
+GPG signing:
+- Read/write: `~/.gnupg`
 
 ```bash
-sx --profile gpg
+sx gpg -- git commit -S -m "signed"
 ```
 
-## Profile Composition
+## Combining Profiles
 
-Profiles can be combined. The order matters for network mode (last one wins):
+Order matters for network mode (last wins). Filesystem paths merge.
 
 ```bash
-# Rust project with full network access
+# Rust with network
 sx rust online -- cargo build
 
-# Rust project with localhost only
-sx rust localhost -- cargo test
+# Rust offline (tests with cached deps)
+sx rust -- cargo test
 
-# GPG signing with network access
-sx gpg online -- git commit -S -m "signed commit"
+# Claude with GPG signing
+sx claude gpg -- claude --dangerously-skip-permissions
+
+# Bun with network
+sx bun online -- bun install
 ```
 
 ## Custom Profiles
 
-Create custom profiles in `~/.config/sx/profiles/` or `./profiles/`:
+Create in `~/.config/sx/profiles/`:
 
 ```toml
 # ~/.config/sx/profiles/mycompany.toml
@@ -86,9 +105,6 @@ network_mode = "online"
 allow_read = ["/opt/mycompany"]
 allow_write = ["~/.mycompany/cache"]
 
-[network]
-allow_domains = ["api.mycompany.com", "*.internal.mycompany.com"]
-
 [shell]
 pass_env = ["MYCOMPANY_TOKEN"]
 ```
@@ -96,23 +112,20 @@ pass_env = ["MYCOMPANY_TOKEN"]
 Use it:
 
 ```bash
-sx --profile mycompany
+sx mycompany -- ./run.sh
 ```
 
-## Profile Merging Rules
+## Project Profiles
 
-When multiple profiles are composed:
-
-1. **Network mode**: Last profile with a network mode wins
-2. **Filesystem paths**: Union of all paths (no duplicates)
-3. **Network domains**: Union of all domains
-4. **Environment variables**: Union of all pass/deny lists
-
-## Project-Specific Profiles
-
-Define profiles in `.sandbox.toml`:
+In `.sandbox.toml`:
 
 ```toml
 [sandbox]
 profiles = ["rust", "localhost"]
 ```
+
+## Merging Rules
+
+1. **Network mode:** last profile with a mode wins
+2. **Filesystem paths:** union (no duplicates)
+3. **Env vars:** union of pass/deny lists
