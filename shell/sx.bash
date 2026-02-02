@@ -26,8 +26,8 @@ fi
 # Completions
 _sx_completions() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
-    local profiles="base online localhost node python rust go claude gpg git"
-    local options="--help --version --verbose --debug --dry-run --explain --init --offline --online --localhost"
+    local profiles="base online localhost rust bun claude gpg"
+    local options="--help --version --verbose --debug --trace --trace-file --dry-run --config --no-config --explain --init --offline --online --localhost --allow-read --allow-write --deny-read"
 
     if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "$options" -- "$cur"))
@@ -39,9 +39,8 @@ _sx_completions() {
 complete -F _sx_completions sx
 
 # Aliases
-alias sxo='sx online'
-alias sxl='sx localhost'
-alias sxn='sx online node'
-alias sxp='sx online python'
-alias sxr='sx online rust'
-alias sxc='sx online claude'
+alias sxo='sx online'              # Online network access
+alias sxl='sx localhost'           # Localhost only
+alias sxb='sx bun online'          # Bun with network
+alias sxr='sx online rust'         # Rust with network
+alias sxc='sx online gpg claude'   # Claude Code with GPG signing

@@ -33,29 +33,32 @@ complete -c sx -s h -l help -d 'Show help'
 complete -c sx -s V -l version -d 'Show version'
 complete -c sx -s v -l verbose -d 'Verbose output'
 complete -c sx -s d -l debug -d 'Debug mode'
+complete -c sx -s t -l trace -d 'Trace violations'
+complete -c sx -l trace-file -d 'Write trace to file'
 complete -c sx -s n -l dry-run -d 'Show profile without executing'
+complete -c sx -s c -l config -d 'Use config file'
+complete -c sx -l no-config -d 'Ignore all config files'
 complete -c sx -l explain -d 'Show what would be allowed/denied'
 complete -c sx -l init -d 'Initialize .sandbox.toml'
 complete -c sx -l offline -d 'Block all network'
 complete -c sx -l online -d 'Allow all network'
 complete -c sx -l localhost -d 'Allow localhost only'
+complete -c sx -l allow-read -d 'Allow read access to path'
+complete -c sx -l allow-write -d 'Allow write access to path'
+complete -c sx -l deny-read -d 'Deny read access to path'
 
 # Profile completions
 complete -c sx -a 'base' -d 'Minimal sandbox'
 complete -c sx -a 'online' -d 'Full network access'
 complete -c sx -a 'localhost' -d 'Localhost network only'
-complete -c sx -a 'node' -d 'Node.js/npm toolchain'
-complete -c sx -a 'python' -d 'Python toolchain'
 complete -c sx -a 'rust' -d 'Rust/Cargo toolchain'
-complete -c sx -a 'go' -d 'Go toolchain'
+complete -c sx -a 'bun' -d 'Bun runtime'
 complete -c sx -a 'claude' -d 'Claude Code support'
 complete -c sx -a 'gpg' -d 'GPG signing support'
-complete -c sx -a 'git' -d 'Git with signing'
 
 # Aliases
-alias sxo 'sx online'
-alias sxl 'sx localhost'
-alias sxn 'sx online node'
-alias sxp 'sx online python'
-alias sxr 'sx online rust'
-alias sxc 'sx online claude'
+alias sxo 'sx online'              # Online network access
+alias sxl 'sx localhost'           # Localhost only
+alias sxb 'sx bun online'          # Bun with network
+alias sxr 'sx online rust'         # Rust with network
+alias sxc 'sx online gpg claude'   # Claude Code with GPG signing

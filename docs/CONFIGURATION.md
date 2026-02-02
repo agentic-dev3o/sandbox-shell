@@ -1,94 +1,68 @@
 # Configuration
 
-`sx` uses a layered configuration system with global, project, and CLI options.
+`sx` uses a layered configuration system: global config, project config, CLI flags.
 
-## Configuration Files
+## Global Config (`~/.config/sx/config.toml`)
 
-### Global Configuration
-
-Location: `~/.config/sx/config.toml`
+Your personal paths. Terminal, shell prompt, directory jumper…
 
 ```toml
 [sandbox]
 default_network = "offline"      # offline | online | localhost
-default_profiles = ["base"]      # profiles to always include
-shell = "/bin/zsh"               # shell to use inside sandbox
-prompt_indicator = true          # show sandbox indicator in prompt
-log_file = "~/.sx/violations.log"
+default_profiles = ["base"]      # always include these
+shell = "/bin/zsh"               # shell inside sandbox
+prompt_indicator = true          # show [sx:mode] in prompt
+inherit_base = true              # include base profile
 
 [filesystem]
-allow_read = ["/usr", "/bin"]    # paths to allow reading
-deny_read = ["~/.ssh", "~/.aws"] # paths to deny reading
-allow_write = ["/tmp"]           # paths to allow writing
+allow_read = [
+    # Shell prompt
+    "~/.config/starship.toml",
+    "~/.cache/starship/",
 
-[network]
-allow_domains = []               # domains to allow when online
-deny_domains = []                # domains to block even when online
+    # zoxide
+    "~/.local/share/zoxide/",
+
+    # Ghostty users - required or terminal breaks
+    "/Applications/Ghostty.app/Contents/Resources/terminfo",
+]
+allow_write = [
+    "~/.local/share/zoxide/",
+    "~/Library/Application Support/zoxide/",
+    "~/.cache/",
+]
+deny_read = []  # additional paths to block
 
 [shell]
-pass_env = ["TERM", "PATH"]      # env vars to pass through
-deny_env = ["AWS_*", "*_SECRET*"] # env vars to block
+pass_env = ["CUSTOM_VAR"]        # env vars to pass through
+deny_env = ["*_SECRET*"]         # env vars to block (wildcards)
+set_env = { CI = "true" }        # env vars to set inside sandbox
 ```
 
-### Project Configuration
+## Project Config (`.sandbox.toml`)
 
-Location: `.sandbox.toml` in project root
+Per-project overrides. Create with `sx --init`.
 
 ```toml
 [sandbox]
-inherit_global = true            # inherit from global config
-profiles = ["rust", "online"]    # additional profiles for this project
+profiles = ["rust"]              # profiles for this project
 network = "localhost"            # override network mode
+inherit_global = true            # inherit from global config
+inherit_base = true              # include base profile (false for full custom)
 
 [filesystem]
-allow_read = ["./target"]
+allow_read = ["./vendor"]
+allow_write = ["./target", "/tmp/build"]
 deny_read = ["./secrets"]
-allow_write = ["./target", "./build"]
 
 [shell]
-pass_env = ["RUST_LOG"]
-set_env = { CI = "true" }
+pass_env = ["RUST_LOG", "NODE_ENV"]
+set_env = { DEBUG = "1" }
 ```
-
-## Configuration Precedence
-
-1. CLI flags (highest priority)
-2. Project config (`.sx.toml`)
-3. Global config (`~/.config/sx/config.toml`)
-4. Built-in defaults (lowest priority)
-
-## Network Modes
-
-| Mode | Description |
-|------|-------------|
-| `offline` | Block all network access (default) |
-| `online` | Allow all network access |
-| `localhost` | Allow only localhost (127.0.0.1) connections |
-
-## Filesystem Rules
-
-- **allow_read**: Paths the sandbox can read from
-- **deny_read**: Paths explicitly denied (overrides allows)
-- **allow_write**: Paths the sandbox can write to (besides working directory)
-
-The working directory always has full read/write access.
-
-## Environment Variables
-
-- **pass_env**: Environment variables passed into the sandbox
-- **deny_env**: Environment variables blocked (supports wildcards)
-- **set_env**: Environment variables to set inside the sandbox
-
-### Wildcard Patterns
-
-Environment variable patterns support wildcards:
-- `AWS_*` - matches any variable starting with `AWS_`
-- `*_SECRET*` - matches variables containing `_SECRET`
-- `*_KEY` - matches variables ending with `_KEY`
 
 ## Custom Profiles
 
-Create custom profiles in `~/.config/sx/profiles/`:
+Create in `~/.config/sx/profiles/`:
 
 ```toml
 # ~/.config/sx/profiles/myproject.toml
@@ -101,3 +75,19 @@ allow_write = ["~/.myproject/cache"]
 [shell]
 pass_env = ["MYPROJECT_TOKEN"]
 ```
+
+Use with `sx myproject -- command`.
+
+## Precedence
+
+1. CLI flags (highest)
+2. Project config (`.sandbox.toml`)
+3. Global config (`~/.config/sx/config.toml`)
+4. Built-in defaults (lowest)
+
+## Environment Wildcards
+
+`deny_env` supports wildcards:
+- `AWS_*` - matches `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`…
+- `*_SECRET*` - matches `DATABASE_SECRET`, `MY_SECRET_KEY`…
+- `*_KEY` - matches `API_KEY`, `SSH_KEY`…
