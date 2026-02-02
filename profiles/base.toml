@@ -5,6 +5,7 @@ network_mode = "offline"
 
 [filesystem]
 allow_read = [
+    # System paths
     "/usr",
     "/bin",
     "/sbin",
@@ -21,8 +22,16 @@ allow_read = [
     "/var/run",
     "/tmp",
     "/dev",
+    # sx config
     "~/.config/sx",
-    "~/Library",
+    # ~/Library - allowlist only safe subdirectories (shift-left)
+    "~/Library/Caches/",
+    "~/Library/Preferences/",
+    "~/Library/Application Support/",
+    "~/Library/Logs/",
+    "~/Library/Frameworks/",
+    "~/Library/Keychains/", # Encrypted, requires Security framework ACL to access secrets
+    "~/Library/Developer/",
     # Shell config files (read-only)
     "~/.zshrc",
     "~/.zshenv",
@@ -32,6 +41,7 @@ allow_read = [
     "~/.profile",
     "~/.inputrc",
 ]
+# This enforce deny on critical path containing sensibles data even if user allow HOME directory in global config
 deny_read = [
     "~/.ssh",
     "~/.aws",
@@ -42,10 +52,8 @@ deny_read = [
 ]
 allow_write = [
     "/tmp",
-    "/private/var/folders",
-    "/private/var/run",
-    "/var/folders",
-    "/var/run"
+    "/private$TMPDIR", # Session-specific temp dir (canonical path)
+    "$TMPDIR", # Session-specific temp dir (symlink path)
 ]
 
 [shell]

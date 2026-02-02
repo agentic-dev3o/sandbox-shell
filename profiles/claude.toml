@@ -6,6 +6,7 @@ network_mode = "online"
 allow_read = [
     "~/.claude",
     "~/.claude.json",
+    "~/.claude.lock",
     "~/.local/share/claude",
     "~/.local/bin/claude",
     "~/.CFUserTextEncoding",
@@ -15,7 +16,10 @@ allow_read = [
 allow_write = [
     "~/.claude",
     "~/.claude.json",
+    "~/.claude.lock",
+    "~/.local/share/claude",
     "~/Library/Caches/claude-cli-nodejs/",
+    "~/Library/Keychains/login.keychain-db", # OAuth token refresh
     "/private/tmp/claude*", # claude-UID directories (e.g. claude-501)
     "/private/tmp/zsh*", # When claude use zsh in bash it create dynamic tmp file
 ]
