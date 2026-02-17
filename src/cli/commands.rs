@@ -392,7 +392,7 @@ fn generate_config_template() -> &'static str {
 inherit_global = true
 
 # Profiles to apply for this project
-# Available: base, online, localhost, rust, claude, gpg
+# Available: base, online, localhost, rust, claude, gpg, opencode
 profiles = []
 
 # Default network mode: "offline", "online", or "localhost"

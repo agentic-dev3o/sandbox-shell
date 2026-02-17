@@ -1,0 +1,31 @@
+# OpenCode profile
+# Provides access to OpenCode configuration and cache directories
+network_mode = "online"
+
+[filesystem]
+allow_read = [
+    # Custom open code
+    "~/.local/share/opencode",
+    "~/.local/state/opencode",
+    "~/.config/opencode",
+    "~/.cache/opencode",
+    "/private/tmp/.*",
+]
+
+allow_write = [
+    # Open code
+    "~/.config/opencode",
+    "~/.local/share/opencode",
+    "~/.local/state/opencode",
+    "~/.cache/opencode",
+    "/private/tmp/.*",
+]
+
+# Directory listing permissions
+allow_list_dirs = [
+    "/private/tmp"
+]
+
+[shell]
+# No additional environment variables needed
+pass_env = []

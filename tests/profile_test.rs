@@ -212,5 +212,51 @@ fn test_builtin_profile_from_name() {
         Some(BuiltinProfile::Claude)
     );
     assert_eq!(BuiltinProfile::from_name("gpg"), Some(BuiltinProfile::Gpg));
+    assert_eq!(
+        BuiltinProfile::from_name("opencode"),
+        Some(BuiltinProfile::Opencode)
+    );
     assert_eq!(BuiltinProfile::from_name("unknown"), None);
+}
+
+#[test]
+fn test_builtin_profile_opencode() {
+    let profile = BuiltinProfile::Opencode.load().unwrap();
+    assert_eq!(profile.network_mode, Some(NetworkMode::Online));
+    assert!(profile
+        .filesystem
+        .allow_read
+        .contains(&"~/.local/share/opencode".to_string()));
+    assert!(profile
+        .filesystem
+        .allow_read
+        .contains(&"~/.local/state/opencode".to_string()));
+    assert!(profile
+        .filesystem
+        .allow_read
+        .contains(&"~/.config/opencode".to_string()));
+    assert!(profile
+        .filesystem
+        .allow_read
+        .contains(&"~/.cache/opencode".to_string()));
+    assert!(profile
+        .filesystem
+        .allow_list_dirs
+        .contains(&"/private/tmp".to_string()));
+    assert!(profile
+        .filesystem
+        .allow_write
+        .contains(&"~/.config/opencode".to_string()));
+    assert!(profile
+        .filesystem
+        .allow_write
+        .contains(&"~/.local/share/opencode".to_string()));
+    assert!(profile
+        .filesystem
+        .allow_write
+        .contains(&"~/.local/state/opencode".to_string()));
+    assert!(profile
+        .filesystem
+        .allow_write
+        .contains(&"~/.cache/opencode".to_string()));
 }
