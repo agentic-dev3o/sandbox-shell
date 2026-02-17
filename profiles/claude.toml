@@ -8,6 +8,8 @@ allow_read = [
     "~/.claude.json",
     "~/.claude.lock",
     "~/.local/share/claude",
+    "~/.local/state/claude", # XDG state dir for locks
+    "~/.cache/claude",       # XDG cache dir for staging
     "~/.local/bin/claude",
     "~/.CFUserTextEncoding",
     "/private/tmp/claude*", # claude-UID directories (e.g. claude-501)
@@ -18,6 +20,8 @@ allow_write = [
     "~/.claude.json",
     "~/.claude.lock",
     "~/.local/share/claude",
+    "~/.local/state/claude", # XDG state dir for locks
+    "~/.cache/claude",       # XDG cache dir for staging
     "~/Library/Caches/claude-cli-nodejs/",
     "~/Library/Keychains/login.keychain-db", # OAuth token refresh
     "/private/tmp/claude*", # claude-UID directories (e.g. claude-501)
