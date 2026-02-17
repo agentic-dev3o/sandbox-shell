@@ -102,6 +102,7 @@ pub enum BuiltinProfile {
     Claude,
     Gpg,
     Bun,
+    Opencode,
 }
 
 impl BuiltinProfile {
@@ -115,6 +116,7 @@ impl BuiltinProfile {
             "claude" => Some(Self::Claude),
             "gpg" => Some(Self::Gpg),
             "bun" => Some(Self::Bun),
+            "opencode" => Some(Self::Opencode),
             _ => None,
         }
     }
@@ -129,6 +131,7 @@ impl BuiltinProfile {
             Self::Claude => "claude",
             Self::Gpg => "gpg",
             Self::Bun => "bun",
+            Self::Opencode => "opencode",
         }
     }
 
@@ -146,6 +149,7 @@ impl BuiltinProfile {
             Self::Claude => include_str!("../../profiles/claude.toml"),
             Self::Gpg => include_str!("../../profiles/gpg.toml"),
             Self::Bun => include_str!("../../profiles/bun.toml"),
+            Self::Opencode => include_str!("../../profiles/opencode.toml"),
         };
         toml::from_str(toml_str).map_err(|e| ProfileError::InvalidBuiltin {
             name: self.name(),

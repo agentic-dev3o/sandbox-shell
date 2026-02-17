@@ -17,7 +17,8 @@ pub use crate::config::schema::NetworkMode;
     localhost   Localhost network only\n    \
     rust        Rust/Cargo toolchain\n    \
     claude      Claude Code (~/.claude access)\n    \
-    gpg         GPG signing support")]
+    gpg         GPG signing support\n    \
+    opencode    OpenCode (~/.config/opencode access)")]
 pub struct Args {
     /// Enable verbose output (show sandbox config)
     #[arg(short, long)]

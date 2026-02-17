@@ -280,3 +280,182 @@ fn test_merge_configs_shell_env() {
         Some(&"active".to_string())
     );
 }
+
+#[test]
+fn test_inherit_global_true_merges_configs() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Write a global config
+    let global_path = temp_dir.path().join("global.toml");
+    std::fs::write(
+        &global_path,
+        r#"
+[filesystem]
+allow_read = ["~/.gitconfig"]
+"#,
+    )
+    .unwrap();
+
+    // Write a project config with inherit_global = true (default)
+    let project_path = temp_dir.path().join(".sandbox.toml");
+    std::fs::write(
+        &project_path,
+        r#"
+[sandbox]
+inherit_global = true
+
+[filesystem]
+allow_read = ["~/.claude"]
+"#,
+    )
+    .unwrap();
+
+    let global = load_global_config(Some(&global_path)).unwrap();
+    let project = load_project_config(temp_dir.path()).unwrap().unwrap();
+
+    // Simulate load_effective_config: inherit_global=true → merge
+    assert!(project.sandbox.inherit_global);
+    let effective = merge_configs(&global, &project);
+
+    // Both global and project paths should be present
+    assert!(effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
+    assert!(effective.filesystem.allow_read.contains(&"~/.claude".to_string()));
+}
+
+#[test]
+fn test_inherit_global_false_skips_global() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Write a global config with extra paths
+    let global_path = temp_dir.path().join("global.toml");
+    std::fs::write(
+        &global_path,
+        r#"
+[sandbox]
+default_network = "online"
+
+[filesystem]
+allow_read = ["~/.gitconfig", "~/.cargo"]
+"#,
+    )
+    .unwrap();
+
+    // Write a project config that opts out of global inheritance
+    let project_path = temp_dir.path().join(".sandbox.toml");
+    std::fs::write(
+        &project_path,
+        r#"
+[sandbox]
+inherit_global = false
+
+[filesystem]
+allow_read = ["~/.claude"]
+"#,
+    )
+    .unwrap();
+
+    let global = load_global_config(Some(&global_path)).unwrap();
+    let project = load_project_config(temp_dir.path()).unwrap().unwrap();
+
+    // Simulate load_effective_config: inherit_global=false → use project only
+    assert!(!project.sandbox.inherit_global);
+    let effective = if project.sandbox.inherit_global {
+        merge_configs(&global, &project)
+    } else {
+        project
+    };
+
+    // Only project paths, global paths must NOT be present
+    assert!(effective.filesystem.allow_read.contains(&"~/.claude".to_string()));
+    assert!(!effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
+    assert!(!effective.filesystem.allow_read.contains(&"~/.cargo".to_string()));
+    // Network stays at project default (offline), not inherited from global (online)
+    assert_eq!(effective.sandbox.default_network, NetworkMode::Offline);
+}
+
+#[test]
+fn test_custom_config_inherit_global_false_uses_standalone() {
+    // When -c specifies a config with inherit_global = false,
+    // it is used as-is without merging with the global config.
+    let temp_dir = TempDir::new().unwrap();
+
+    let global_path = temp_dir.path().join("global.toml");
+    std::fs::write(
+        &global_path,
+        r#"
+[filesystem]
+allow_read = ["~/.gitconfig"]
+"#,
+    )
+    .unwrap();
+
+    let custom_path = temp_dir.path().join("custom.toml");
+    std::fs::write(
+        &custom_path,
+        r#"
+[sandbox]
+inherit_global = false
+
+[filesystem]
+allow_read = ["~/.custom"]
+"#,
+    )
+    .unwrap();
+
+    // Simulate load_effective_config with -c flag
+    let content = std::fs::read_to_string(&custom_path).unwrap();
+    let project: Config = toml::from_str(&content).unwrap();
+
+    // inherit_global = false → use project config as-is
+    assert!(!project.sandbox.inherit_global);
+    assert!(project.filesystem.allow_read.contains(&"~/.custom".to_string()));
+    assert!(!project.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
+}
+
+#[test]
+fn test_custom_config_inherit_global_true_merges_with_global() {
+    // When -c specifies a config with inherit_global = true,
+    // it is merged with the global config from the default location.
+    let temp_dir = TempDir::new().unwrap();
+
+    let global_path = temp_dir.path().join("global.toml");
+    std::fs::write(
+        &global_path,
+        r#"
+[filesystem]
+allow_read = ["~/.gitconfig", "~/.config/git/"]
+allow_write = ["~/.cache/"]
+"#,
+    )
+    .unwrap();
+
+    let custom_path = temp_dir.path().join("custom.toml");
+    std::fs::write(
+        &custom_path,
+        r#"
+[sandbox]
+inherit_global = true
+profiles = ["online"]
+
+[filesystem]
+allow_read = ["~/.custom"]
+allow_write = ["~/.custom-data/"]
+"#,
+    )
+    .unwrap();
+
+    // Simulate load_effective_config with -c flag + inherit_global = true
+    let content = std::fs::read_to_string(&custom_path).unwrap();
+    let project: Config = toml::from_str(&content).unwrap();
+    let global = load_global_config(Some(&global_path)).unwrap();
+
+    assert!(project.sandbox.inherit_global);
+    let effective = merge_configs(&global, &project);
+
+    // Both global and project paths should be merged
+    assert!(effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
+    assert!(effective.filesystem.allow_read.contains(&"~/.config/git/".to_string()));
+    assert!(effective.filesystem.allow_read.contains(&"~/.custom".to_string()));
+    assert!(effective.filesystem.allow_write.contains(&"~/.cache/".to_string()));
+    assert!(effective.filesystem.allow_write.contains(&"~/.custom-data/".to_string()));
+}

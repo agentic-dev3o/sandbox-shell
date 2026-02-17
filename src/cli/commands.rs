@@ -195,14 +195,24 @@ fn load_effective_config(args: &Args, working_dir: &Path) -> Result<Config> {
         return Ok(Config::default());
     }
 
-    // Load global config
-    let global =
-        load_global_config(args.config.as_deref()).context("Failed to load global config")?;
+    // Explicit -c flag: treat as project config
+    if let Some(config_path) = &args.config {
+        let content = std::fs::read_to_string(config_path)
+            .with_context(|| format!("Failed to read config: {}", config_path.display()))?;
+        let project: Config = toml::from_str(&content)
+            .with_context(|| format!("Failed to parse config: {}", config_path.display()))?;
 
-    // Load project config
+        if project.sandbox.inherit_global {
+            let global = load_global_config(None).context("Failed to load global config")?;
+            return Ok(merge_configs(&global, &project));
+        }
+        return Ok(project);
+    }
+
+    // Default: load global config and project config from working directory
+    let global = load_global_config(None).context("Failed to load global config")?;
     let project = load_project_config(working_dir).context("Failed to load project config")?;
 
-    // Merge if project config exists and inherits
     match project {
         Some(proj) if proj.sandbox.inherit_global => Ok(merge_configs(&global, &proj)),
         Some(proj) => Ok(proj),
@@ -382,7 +392,7 @@ fn generate_config_template() -> &'static str {
 inherit_global = true
 
 # Profiles to apply for this project
-# Available: base, online, localhost, rust, claude, gpg
+# Available: base, online, localhost, rust, claude, gpg, opencode
 profiles = []
 
 # Default network mode: "offline", "online", or "localhost"
