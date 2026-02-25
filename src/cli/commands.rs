@@ -47,7 +47,7 @@ pub fn explain(args: &Args) -> Result<()> {
     // Exec sugid
     match &context.params.allow_exec_sugid {
         ExecSugid::Allow(true) => println!("Setuid/Setgid Execution: ALLOW ALL"),
-        ExecSugid::Paths(paths) => {
+        ExecSugid::Paths(paths) if !paths.is_empty() => {
             println!("Setuid/Setgid Execution: specific binaries");
             for path in paths {
                 println!("  + {}", path);
