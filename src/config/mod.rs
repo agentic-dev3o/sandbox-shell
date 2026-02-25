@@ -11,4 +11,4 @@ pub use profile::{
     ProfileFilesystem, ProfileShell,
 };
 pub use project::load_project_config;
-pub use schema::{Config, NetworkMode};
+pub use schema::{Config, ExecSugid, NetworkMode};

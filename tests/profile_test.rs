@@ -1,5 +1,5 @@
 use sx::config::profile::{compose_profiles, load_profile, load_profiles, BuiltinProfile, Profile};
-use sx::config::schema::NetworkMode;
+use sx::config::schema::{ExecSugid, NetworkMode};
 use tempfile::TempDir;
 
 #[test]
@@ -259,4 +259,71 @@ fn test_builtin_profile_opencode() {
         .filesystem
         .allow_write
         .contains(&"~/.cache/opencode".to_string()));
+}
+
+// === ExecSugid Profile Compose Tests ===
+
+#[test]
+fn test_compose_profiles_exec_sugid_last_bool_wins() {
+    let p1 = Profile {
+        allow_exec_sugid: Some(ExecSugid::Allow(true)),
+        ..Default::default()
+    };
+    let p2 = Profile {
+        allow_exec_sugid: Some(ExecSugid::Allow(false)),
+        ..Default::default()
+    };
+    let composed = compose_profiles(&[p1, p2]);
+    assert_eq!(composed.allow_exec_sugid, Some(ExecSugid::Allow(false)));
+}
+
+#[test]
+fn test_compose_profiles_exec_sugid_paths_union() {
+    let p1 = Profile {
+        allow_exec_sugid: Some(ExecSugid::Paths(vec!["/bin/ps".into()])),
+        ..Default::default()
+    };
+    let p2 = Profile {
+        allow_exec_sugid: Some(ExecSugid::Paths(vec!["/usr/bin/newgrp".into()])),
+        ..Default::default()
+    };
+    let composed = compose_profiles(&[p1, p2]);
+    match &composed.allow_exec_sugid {
+        Some(ExecSugid::Paths(paths)) => {
+            assert!(paths.contains(&"/bin/ps".to_string()));
+            assert!(paths.contains(&"/usr/bin/newgrp".to_string()));
+        }
+        other => panic!("Expected Some(Paths), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_compose_profiles_exec_sugid_none_inherits() {
+    let p1 = Profile {
+        allow_exec_sugid: Some(ExecSugid::Paths(vec!["/bin/ps".into()])),
+        ..Default::default()
+    };
+    let p2 = Profile {
+        allow_exec_sugid: None,
+        ..Default::default()
+    };
+    let composed = compose_profiles(&[p1, p2]);
+    assert_eq!(
+        composed.allow_exec_sugid,
+        Some(ExecSugid::Paths(vec!["/bin/ps".into()]))
+    );
+}
+
+#[test]
+fn test_compose_profiles_exec_sugid_bool_overrides_paths() {
+    let p1 = Profile {
+        allow_exec_sugid: Some(ExecSugid::Paths(vec!["/bin/ps".into()])),
+        ..Default::default()
+    };
+    let p2 = Profile {
+        allow_exec_sugid: Some(ExecSugid::Allow(true)),
+        ..Default::default()
+    };
+    let composed = compose_profiles(&[p1, p2]);
+    assert_eq!(composed.allow_exec_sugid, Some(ExecSugid::Allow(true)));
 }

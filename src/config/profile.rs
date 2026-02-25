@@ -1,4 +1,4 @@
-use crate::config::schema::NetworkMode;
+use crate::config::schema::{ExecSugid, NetworkMode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -64,6 +64,9 @@ pub struct Profile {
     /// Raw seatbelt rules (advanced)
     #[serde(default)]
     pub seatbelt: Option<ProfileSeatbelt>,
+    /// Allow execution of setuid/setgid binaries
+    #[serde(default)]
+    pub allow_exec_sugid: Option<ExecSugid>,
 }
 
 /// Profile filesystem configuration
@@ -275,6 +278,26 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
         // Shell: merge unique env vars
         merge_unique(&mut result.shell.pass_env, &profile.shell.pass_env);
         merge_unique(&mut result.shell.deny_env, &profile.shell.deny_env);
+
+        // ExecSugid: Paths union-merge, otherwise last-set wins
+        if let Some(incoming) = &profile.allow_exec_sugid {
+            match (&result.allow_exec_sugid, incoming) {
+                (Some(ExecSugid::Paths(existing)), ExecSugid::Paths(new)) => {
+                    let mut merged = existing.clone();
+                    let existing_set: HashSet<&str> =
+                        existing.iter().map(|s| s.as_str()).collect();
+                    for path in new {
+                        if !existing_set.contains(path.as_str()) {
+                            merged.push(path.clone());
+                        }
+                    }
+                    result.allow_exec_sugid = Some(ExecSugid::Paths(merged));
+                }
+                _ => {
+                    result.allow_exec_sugid = Some(incoming.clone());
+                }
+            }
+        }
     }
 
     result

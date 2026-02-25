@@ -116,3 +116,22 @@ fn test_no_config_flag() {
     let args = Args::try_parse_from(["sx", "--no-config"]).unwrap();
     assert!(args.no_config);
 }
+
+#[test]
+fn test_allow_exec_sugid_single_path() {
+    let args = Args::try_parse_from(["sx", "--allow-exec-sugid", "/bin/ps"]).unwrap();
+    assert_eq!(args.allow_exec_sugid, vec!["/bin/ps"]);
+}
+
+#[test]
+fn test_allow_exec_sugid_multiple_paths() {
+    let args = Args::try_parse_from([
+        "sx",
+        "--allow-exec-sugid",
+        "/bin/ps",
+        "--allow-exec-sugid",
+        "/usr/bin/newgrp",
+    ])
+    .unwrap();
+    assert_eq!(args.allow_exec_sugid, vec!["/bin/ps", "/usr/bin/newgrp"]);
+}

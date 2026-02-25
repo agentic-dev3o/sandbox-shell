@@ -83,6 +83,10 @@ pub struct Args {
     #[arg(long = "deny-read", value_name = "PATH")]
     pub deny_read: Vec<String>,
 
+    /// Allow execution of setuid/setgid binary at PATH (e.g., /bin/ps)
+    #[arg(long = "allow-exec-sugid", value_name = "PATH")]
+    pub allow_exec_sugid: Vec<String>,
+
     /// Profiles to apply (e.g., online, rust, claude)
     #[arg(value_name = "PROFILES")]
     pub profiles: Vec<String>,
