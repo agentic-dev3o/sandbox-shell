@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2026-02-26
+
+### Bug Fixes
+
+- **claude:** Add XDG state and cache paths for Claude Code 2.x (#20)
+
+
+### Dependencies
+
+- Bump the rust-dependencies group with 2 updates (#21)
+
+- Bump the rust-dependencies group with 4 updates (#23)
+
+- Bump the rust-dependencies group with 3 updates (#25)
+
+
+### Documentation
+
+- **changelog:** Cliff config (#19)
+
+
+### Features
+
+- **profile:** Add opencode profile and improve config handling (#24)
+
+- Add allow_exec_sugid config option for setuid binary execution (#26)
+
 ## [0.3.0] - 2026-02-02
 
 ### Bug Fixes
