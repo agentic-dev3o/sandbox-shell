@@ -302,9 +302,7 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
         // Seatbelt: concatenate raw rules from all profiles
         if let Some(seatbelt) = &profile.seatbelt {
             if let Some(raw) = &seatbelt.raw {
-                let existing = result
-                    .seatbelt
-                    .get_or_insert_with(ProfileSeatbelt::default);
+                let existing = result.seatbelt.get_or_insert_with(ProfileSeatbelt::default);
                 match &mut existing.raw {
                     Some(current) => {
                         current.push('\n');
