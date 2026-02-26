@@ -207,10 +207,11 @@ pub fn load_profiles(names: &[String], custom_dir: Option<&Path>) -> Vec<Profile
                 }
             }
 
-            // Try global profile directory
-            if let Some(config_dir) = dirs::config_dir() {
-                let path = config_dir
-                    .join("sx/profiles")
+            // Try global profile directory (~/.config/sx/profiles/)
+            // Uses ~/.config to match global config path (global.rs)
+            if let Some(home) = dirs::home_dir() {
+                let path = home
+                    .join(".config/sx/profiles")
                     .join(format!("{}.toml", name));
                 if path.exists() {
                     match load_profile(&path) {
@@ -294,6 +295,22 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
                 }
                 _ => {
                     result.allow_exec_sugid = Some(incoming.clone());
+                }
+            }
+        }
+
+        // Seatbelt: concatenate raw rules from all profiles
+        if let Some(seatbelt) = &profile.seatbelt {
+            if let Some(raw) = &seatbelt.raw {
+                let existing = result
+                    .seatbelt
+                    .get_or_insert_with(ProfileSeatbelt::default);
+                match &mut existing.raw {
+                    Some(current) => {
+                        current.push('\n');
+                        current.push_str(raw);
+                    }
+                    None => existing.raw = Some(raw.clone()),
                 }
             }
         }
