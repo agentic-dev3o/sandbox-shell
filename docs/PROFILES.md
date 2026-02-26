@@ -116,6 +116,40 @@ Use it:
 sx mycompany -- ./run.sh
 ```
 
+### Raw Seatbelt Rules
+
+For advanced use cases (IOKit, Mach services, app bundles), custom profiles support raw seatbelt rules:
+
+```toml
+# ~/.config/sx/profiles/playwright.toml
+network_mode = "online"
+
+[seatbelt]
+raw = """
+(allow iokit-open-user-client
+  (iokit-user-client-class "RootDomainUserClient")
+  (iokit-user-client-class "AGXDeviceUserClient")
+  (iokit-user-client-class "IOSurfaceRootUserClient"))
+(allow iokit-get-properties)
+(allow file-issue-extension)
+"""
+
+[filesystem]
+allow_read = ["~/Library/Caches/ms-playwright/"]
+allow_write = ["~/Library/Caches/ms-playwright/"]
+```
+
+Raw rules are appended verbatim to the generated seatbelt profile. Use `sx --dry-run myprofile` to verify the output.
+
+### Profile Resolution Order
+
+When you specify a profile name, `sx` searches in this order:
+
+1. **Built-in profiles** (embedded in the binary)
+2. **Project custom directory** (if configured)
+3. **`~/.config/sx/profiles/{name}.toml`**
+4. **Fallback** to `online` with a warning if not found
+
 ## Project Profiles
 
 In `.sandbox.toml`:
@@ -131,3 +165,4 @@ profiles = ["rust", "localhost"]
 2. **Filesystem paths:** union (no duplicates)
 3. **Env vars:** union of pass/deny lists
 4. **Exec sugid:** path lists are unioned; mixing paths and booleans → last wins
+5. **Seatbelt raw rules:** concatenated from all profiles in order

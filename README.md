@@ -139,7 +139,7 @@ allow_write = ["/tmp/build"]
 pass_env = ["NODE_ENV", "DEBUG"]
 ```
 
-Custom profiles go in `~/.config/sx/profiles/name.toml`.
+Custom profiles go in `~/.config/sx/profiles/name.toml`. They support filesystem paths, env vars, exec sugid, and raw seatbelt rules for advanced sandbox operations. See [docs/PROFILES.md](docs/PROFILES.md).
 
 ## Usage
 
