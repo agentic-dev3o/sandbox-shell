@@ -677,10 +677,7 @@ mod tests {
     #[test]
     fn test_exec_sugid_specific_paths() {
         let params = SandboxParams {
-            allow_exec_sugid: ExecSugid::Paths(vec![
-                "/bin/ps".into(),
-                "/usr/bin/newgrp".into(),
-            ]),
+            allow_exec_sugid: ExecSugid::Paths(vec!["/bin/ps".into(), "/usr/bin/newgrp".into()]),
             ..Default::default()
         };
         let profile = generate_seatbelt_profile(&params).unwrap();
@@ -690,9 +687,8 @@ mod tests {
             profile
         );
         assert!(
-            profile.contains(
-                r#"(allow process-exec (with no-sandbox) (literal "/usr/bin/newgrp"))"#
-            ),
+            profile
+                .contains(r#"(allow process-exec (with no-sandbox) (literal "/usr/bin/newgrp"))"#),
             "Should emit literal rule for /usr/bin/newgrp, got:\n{}",
             profile
         );

@@ -284,8 +284,7 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
             match (&result.allow_exec_sugid, incoming) {
                 (Some(ExecSugid::Paths(existing)), ExecSugid::Paths(new)) => {
                     let mut merged = existing.clone();
-                    let existing_set: HashSet<&str> =
-                        existing.iter().map(|s| s.as_str()).collect();
+                    let existing_set: HashSet<&str> = existing.iter().map(|s| s.as_str()).collect();
                     for path in new {
                         if !existing_set.contains(path.as_str()) {
                             merged.push(path.clone());

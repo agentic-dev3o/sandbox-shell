@@ -320,8 +320,14 @@ allow_read = ["~/.claude"]
     let effective = merge_configs(&global, &project);
 
     // Both global and project paths should be present
-    assert!(effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
-    assert!(effective.filesystem.allow_read.contains(&"~/.claude".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.gitconfig".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.claude".to_string()));
 }
 
 #[test]
@@ -368,9 +374,18 @@ allow_read = ["~/.claude"]
     };
 
     // Only project paths, global paths must NOT be present
-    assert!(effective.filesystem.allow_read.contains(&"~/.claude".to_string()));
-    assert!(!effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
-    assert!(!effective.filesystem.allow_read.contains(&"~/.cargo".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.claude".to_string()));
+    assert!(!effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.gitconfig".to_string()));
+    assert!(!effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.cargo".to_string()));
     // Network stays at project default (offline), not inherited from global (online)
     assert_eq!(effective.sandbox.default_network, NetworkMode::Offline);
 }
@@ -410,8 +425,14 @@ allow_read = ["~/.custom"]
 
     // inherit_global = false → use project config as-is
     assert!(!project.sandbox.inherit_global);
-    assert!(project.filesystem.allow_read.contains(&"~/.custom".to_string()));
-    assert!(!project.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
+    assert!(project
+        .filesystem
+        .allow_read
+        .contains(&"~/.custom".to_string()));
+    assert!(!project
+        .filesystem
+        .allow_read
+        .contains(&"~/.gitconfig".to_string()));
 }
 
 #[test]
@@ -455,11 +476,26 @@ allow_write = ["~/.custom-data/"]
     let effective = merge_configs(&global, &project);
 
     // Both global and project paths should be merged
-    assert!(effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
-    assert!(effective.filesystem.allow_read.contains(&"~/.config/git/".to_string()));
-    assert!(effective.filesystem.allow_read.contains(&"~/.custom".to_string()));
-    assert!(effective.filesystem.allow_write.contains(&"~/.cache/".to_string()));
-    assert!(effective.filesystem.allow_write.contains(&"~/.custom-data/".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.gitconfig".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.config/git/".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.custom".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_write
+        .contains(&"~/.cache/".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_write
+        .contains(&"~/.custom-data/".to_string()));
 }
 
 // === ExecSugid Config Tests ===
