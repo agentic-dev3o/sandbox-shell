@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - 2026-02-26
+
+### Bug Fixes
+
+- **profile:** Use correct config path and merge seatbelt rules (#28)
+
 ## [1.0.0] - 2026-02-26
 
 ### Bug Fixes
