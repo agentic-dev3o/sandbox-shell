@@ -1,4 +1,6 @@
-use sx::config::profile::{compose_profiles, load_profile, load_profiles, BuiltinProfile, Profile};
+use sx::config::profile::{
+    compose_profiles, load_profile, load_profiles, BuiltinProfile, Profile, ProfileSeatbelt,
+};
 use sx::config::schema::{ExecSugid, NetworkMode};
 use tempfile::TempDir;
 
@@ -326,4 +328,56 @@ fn test_compose_profiles_exec_sugid_bool_overrides_paths() {
     };
     let composed = compose_profiles(&[p1, p2]);
     assert_eq!(composed.allow_exec_sugid, Some(ExecSugid::Allow(true)));
+}
+
+// === Seatbelt Profile Compose Tests ===
+
+#[test]
+fn test_compose_profiles_seatbelt_single() {
+    let p = Profile {
+        seatbelt: Some(ProfileSeatbelt {
+            raw: Some("(allow iokit-get-properties)".into()),
+        }),
+        ..Default::default()
+    };
+    let composed = compose_profiles(&[p]);
+    let raw = composed.seatbelt.unwrap().raw.unwrap();
+    assert_eq!(raw, "(allow iokit-get-properties)");
+}
+
+#[test]
+fn test_compose_profiles_seatbelt_concatenation() {
+    let p1 = Profile {
+        seatbelt: Some(ProfileSeatbelt {
+            raw: Some("(allow iokit-get-properties)".into()),
+        }),
+        ..Default::default()
+    };
+    let p2 = Profile {
+        seatbelt: Some(ProfileSeatbelt {
+            raw: Some("(allow file-issue-extension)".into()),
+        }),
+        ..Default::default()
+    };
+    let composed = compose_profiles(&[p1, p2]);
+    let raw = composed.seatbelt.unwrap().raw.unwrap();
+    assert!(raw.contains("(allow iokit-get-properties)"));
+    assert!(raw.contains("(allow file-issue-extension)"));
+}
+
+#[test]
+fn test_compose_profiles_seatbelt_none_skipped() {
+    let p1 = Profile {
+        seatbelt: Some(ProfileSeatbelt {
+            raw: Some("(allow iokit-get-properties)".into()),
+        }),
+        ..Default::default()
+    };
+    let p2 = Profile {
+        seatbelt: None,
+        ..Default::default()
+    };
+    let composed = compose_profiles(&[p1, p2]);
+    let raw = composed.seatbelt.unwrap().raw.unwrap();
+    assert_eq!(raw, "(allow iokit-get-properties)");
 }

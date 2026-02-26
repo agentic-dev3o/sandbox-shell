@@ -80,6 +80,22 @@ pass_env = ["MYPROJECT_TOKEN"]
 
 Use with `sx myproject -- command`.
 
+Custom profiles also support raw seatbelt rules for advanced sandbox operations (IOKit, Mach services, app bundles):
+
+```toml
+# ~/.config/sx/profiles/playwright.toml
+network_mode = "online"
+
+[seatbelt]
+raw = """
+(allow iokit-open-user-client
+  (iokit-user-client-class "RootDomainUserClient"))
+(allow iokit-get-properties)
+"""
+```
+
+Raw rules from all active profiles are concatenated in order. See [PROFILES.md](PROFILES.md) for details.
+
 ## Setuid/Setgid Execution
 
 Some binaries like `/bin/ps` are setuid/setgid. Seatbelt blocks these by default with `forbidden-exec-sugid`. Use `allow_exec_sugid` to opt in.
