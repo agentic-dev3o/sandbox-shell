@@ -100,6 +100,7 @@ Create in `~/.config/sx/profiles/`:
 ```toml
 # ~/.config/sx/profiles/mycompany.toml
 network_mode = "online"
+allow_exec_sugid = ["/bin/ps"]  # allow specific setuid/setgid binaries
 
 [filesystem]
 allow_read = ["/opt/mycompany"]
@@ -129,3 +130,4 @@ profiles = ["rust", "localhost"]
 1. **Network mode:** last profile with a mode wins
 2. **Filesystem paths:** union (no duplicates)
 3. **Env vars:** union of pass/deny lists
+4. **Exec sugid:** path lists are unioned; mixing paths and booleans → last wins

@@ -52,6 +52,20 @@ Everything else (`~/.config/gh`, `~/.netrc`, `~/.gnupg`…) is blocked by deny-b
 
 Even with `online`, your credentials can't be read. Can't exfiltrate what you can't see.
 
+### Setuid/Setgid Execution
+
+Setuid/setgid binaries (e.g., `/bin/ps`, `/usr/bin/newgrp`) are denied by default. Seatbelt raises `forbidden-exec-sugid` when a sandboxed process tries to execute one.
+
+Opt in selectively via `allow_exec_sugid`:
+
+| Mode | Seatbelt rule |
+|------|---------------|
+| Deny (default) | No rule — blocked by `(deny default)` |
+| Allow all | `(allow process-exec* (with no-sandbox))` |
+| Specific paths | `(allow process-exec (with no-sandbox) (literal "/bin/ps"))` |
+
+Paths are validated against injection attacks (no quotes, newlines, or null bytes).
+
 ### Environment Sanitization
 
 Blocked by default:
@@ -70,6 +84,10 @@ Blocked by default:
 (allow process-fork)
 (allow process-exec)
 (allow signal (target self))
+
+; Setuid/setgid execution denied (default)
+; Or, if allow_exec_sugid = ["/bin/ps"]:
+; (allow process-exec (with no-sandbox) (literal "/bin/ps"))
 
 ; Required for path resolution
 (allow file-read* (literal "/"))
