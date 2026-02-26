@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use sx::config::global::load_global_config;
 use sx::config::merge::merge_configs;
 use sx::config::project::load_project_config;
-use sx::config::schema::{Config, FilesystemConfig, NetworkMode, SandboxConfig, ShellConfig};
+use sx::config::schema::{
+    Config, ExecSugid, FilesystemConfig, NetworkMode, SandboxConfig, ShellConfig,
+};
 use sx::utils::paths::expand_path;
 use tempfile::TempDir;
 
@@ -318,8 +320,14 @@ allow_read = ["~/.claude"]
     let effective = merge_configs(&global, &project);
 
     // Both global and project paths should be present
-    assert!(effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
-    assert!(effective.filesystem.allow_read.contains(&"~/.claude".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.gitconfig".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.claude".to_string()));
 }
 
 #[test]
@@ -366,9 +374,18 @@ allow_read = ["~/.claude"]
     };
 
     // Only project paths, global paths must NOT be present
-    assert!(effective.filesystem.allow_read.contains(&"~/.claude".to_string()));
-    assert!(!effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
-    assert!(!effective.filesystem.allow_read.contains(&"~/.cargo".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.claude".to_string()));
+    assert!(!effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.gitconfig".to_string()));
+    assert!(!effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.cargo".to_string()));
     // Network stays at project default (offline), not inherited from global (online)
     assert_eq!(effective.sandbox.default_network, NetworkMode::Offline);
 }
@@ -408,8 +425,14 @@ allow_read = ["~/.custom"]
 
     // inherit_global = false → use project config as-is
     assert!(!project.sandbox.inherit_global);
-    assert!(project.filesystem.allow_read.contains(&"~/.custom".to_string()));
-    assert!(!project.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
+    assert!(project
+        .filesystem
+        .allow_read
+        .contains(&"~/.custom".to_string()));
+    assert!(!project
+        .filesystem
+        .allow_read
+        .contains(&"~/.gitconfig".to_string()));
 }
 
 #[test]
@@ -453,9 +476,124 @@ allow_write = ["~/.custom-data/"]
     let effective = merge_configs(&global, &project);
 
     // Both global and project paths should be merged
-    assert!(effective.filesystem.allow_read.contains(&"~/.gitconfig".to_string()));
-    assert!(effective.filesystem.allow_read.contains(&"~/.config/git/".to_string()));
-    assert!(effective.filesystem.allow_read.contains(&"~/.custom".to_string()));
-    assert!(effective.filesystem.allow_write.contains(&"~/.cache/".to_string()));
-    assert!(effective.filesystem.allow_write.contains(&"~/.custom-data/".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.gitconfig".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.config/git/".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_read
+        .contains(&"~/.custom".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_write
+        .contains(&"~/.cache/".to_string()));
+    assert!(effective
+        .filesystem
+        .allow_write
+        .contains(&"~/.custom-data/".to_string()));
+}
+
+// === ExecSugid Config Tests ===
+
+#[test]
+fn test_parse_config_with_exec_sugid_paths() {
+    let config: Config = toml::from_str(
+        r#"
+[sandbox]
+allow_exec_sugid = ["/bin/ps"]
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        config.sandbox.allow_exec_sugid,
+        ExecSugid::Paths(vec!["/bin/ps".into()])
+    );
+}
+
+#[test]
+fn test_merge_exec_sugid_project_overrides_global() {
+    let global = Config {
+        sandbox: SandboxConfig {
+            allow_exec_sugid: ExecSugid::Allow(false),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let project = Config {
+        sandbox: SandboxConfig {
+            allow_exec_sugid: ExecSugid::Allow(true),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let merged = merge_configs(&global, &project);
+    assert_eq!(merged.sandbox.allow_exec_sugid, ExecSugid::Allow(true));
+}
+
+#[test]
+fn test_merge_exec_sugid_paths_union() {
+    let global = Config {
+        sandbox: SandboxConfig {
+            allow_exec_sugid: ExecSugid::Paths(vec!["/bin/ps".into()]),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let project = Config {
+        sandbox: SandboxConfig {
+            allow_exec_sugid: ExecSugid::Paths(vec!["/usr/bin/newgrp".into()]),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let merged = merge_configs(&global, &project);
+    match &merged.sandbox.allow_exec_sugid {
+        ExecSugid::Paths(paths) => {
+            assert!(paths.contains(&"/bin/ps".to_string()));
+            assert!(paths.contains(&"/usr/bin/newgrp".to_string()));
+        }
+        other => panic!("Expected Paths, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_merge_exec_sugid_paths_override_by_bool() {
+    let global = Config {
+        sandbox: SandboxConfig {
+            allow_exec_sugid: ExecSugid::Paths(vec!["/bin/ps".into()]),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let project = Config {
+        sandbox: SandboxConfig {
+            allow_exec_sugid: ExecSugid::Allow(true),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let merged = merge_configs(&global, &project);
+    assert_eq!(merged.sandbox.allow_exec_sugid, ExecSugid::Allow(true));
+}
+
+#[test]
+fn test_merge_exec_sugid_default_project_keeps_global() {
+    let global = Config {
+        sandbox: SandboxConfig {
+            allow_exec_sugid: ExecSugid::Paths(vec!["/bin/ps".into()]),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let project = Config::default();
+    let merged = merge_configs(&global, &project);
+    assert_eq!(
+        merged.sandbox.allow_exec_sugid,
+        ExecSugid::Paths(vec!["/bin/ps".into()])
+    );
 }

@@ -1,4 +1,4 @@
-use super::schema::{Config, FilesystemConfig, SandboxConfig, ShellConfig};
+use super::schema::{Config, ExecSugid, FilesystemConfig, SandboxConfig, ShellConfig};
 use std::collections::HashSet;
 
 /// Merge two configurations, with project taking precedence
@@ -47,6 +47,19 @@ fn merge_sandbox(global: &SandboxConfig, project: &SandboxConfig) -> SandboxConf
         // Merge profiles (using pre-filtered global_profiles)
         profiles: merge_unique_strings(&global_profiles, &project.profiles),
         network: project.network,
+        allow_exec_sugid: merge_exec_sugid(&global.allow_exec_sugid, &project.allow_exec_sugid),
+    }
+}
+
+/// Merge ExecSugid: if both are Paths, union-merge; otherwise project overrides global.
+fn merge_exec_sugid(global: &ExecSugid, project: &ExecSugid) -> ExecSugid {
+    // If project is default (deny all), keep global
+    if project.is_default() && !global.is_default() {
+        return global.clone();
+    }
+    match (global, project) {
+        (ExecSugid::Paths(g), ExecSugid::Paths(p)) => ExecSugid::Paths(merge_unique_strings(g, p)),
+        _ => project.clone(),
     }
 }
 

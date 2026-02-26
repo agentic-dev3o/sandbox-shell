@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use super::args::Args;
 use crate::config::project::{load_project_config, PROJECT_CONFIG_NAME};
 use crate::config::{
-    compose_profiles, load_global_config, load_profiles, merge_configs, Config, NetworkMode,
-    Profile,
+    compose_profiles, load_global_config, load_profiles, merge_configs, Config, ExecSugid,
+    NetworkMode, Profile,
 };
 use crate::detection::project_type::detect_project_types;
 use crate::sandbox::executor::execute_sandboxed_with_trace;
@@ -42,6 +42,19 @@ pub fn explain(args: &Args) -> Result<()> {
 
     // Network mode
     println!("Network Mode: {:?}", context.params.network_mode);
+    println!();
+
+    // Exec sugid
+    match &context.params.allow_exec_sugid {
+        ExecSugid::Allow(true) => println!("Setuid/Setgid Execution: ALLOW ALL"),
+        ExecSugid::Paths(paths) if !paths.is_empty() => {
+            println!("Setuid/Setgid Execution: specific binaries");
+            for path in paths {
+                println!("  + {}", path);
+            }
+        }
+        _ => println!("Setuid/Setgid Execution: denied (default)"),
+    }
     println!();
 
     // Working directory
@@ -275,6 +288,9 @@ fn build_sandbox_params(
     // Determine network mode (CLI > profile > config)
     let network_mode = determine_network_mode(args, profile, config);
 
+    // Determine exec sugid policy (CLI > profile > config)
+    let allow_exec_sugid = determine_exec_sugid(args, profile, config);
+
     // Collect paths with expansions
     let mut allow_read = collect_allow_read_paths(config, profile, &args.allow_read);
     let mut deny_read = collect_deny_read_paths(config, profile, &args.deny_read);
@@ -324,6 +340,7 @@ fn build_sandbox_params(
         allow_write: allow_write.into_iter().map(PathBuf::from).collect(),
         allow_list_dirs: allow_list_dirs.into_iter().map(PathBuf::from).collect(),
         raw_rules,
+        allow_exec_sugid,
     }
 }
 
@@ -344,6 +361,22 @@ fn determine_network_mode(args: &Args, profile: &Profile, config: &Config) -> Ne
         .sandbox
         .network
         .unwrap_or(config.sandbox.default_network)
+}
+
+/// Determine exec sugid policy with precedence: CLI > profile > config
+fn determine_exec_sugid(args: &Args, profile: &Profile, config: &Config) -> ExecSugid {
+    // CLI paths take highest precedence
+    if !args.allow_exec_sugid.is_empty() {
+        return ExecSugid::Paths(args.allow_exec_sugid.clone());
+    }
+
+    // Profile setting
+    if let Some(sugid) = &profile.allow_exec_sugid {
+        return sugid.clone();
+    }
+
+    // Config setting
+    config.sandbox.allow_exec_sugid.clone()
 }
 
 /// Collect allow-read paths from config, profile, and CLI
@@ -397,6 +430,10 @@ profiles = []
 
 # Default network mode: "offline", "online", or "localhost"
 # network = "offline"
+
+# Allow execution of setuid/setgid binaries (default: false)
+# false = deny all, true = allow all, or list specific paths
+# allow_exec_sugid = ["/bin/ps"]
 
 [filesystem]
 # Additional paths this project needs to read

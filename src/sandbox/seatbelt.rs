@@ -3,7 +3,7 @@
 //! Generates Apple Seatbelt profiles that enforce filesystem and network restrictions.
 //! Uses a deny-by-default security model where only explicitly allowed paths are accessible.
 
-use crate::config::schema::NetworkMode;
+use crate::config::schema::{ExecSugid, NetworkMode};
 use std::path::PathBuf;
 
 /// Error type for seatbelt profile generation
@@ -104,6 +104,8 @@ pub struct SandboxParams {
     pub allow_list_dirs: Vec<PathBuf>,
     /// Raw seatbelt rules to include verbatim
     pub raw_rules: Option<String>,
+    /// Allow execution of setuid/setgid binaries
+    pub allow_exec_sugid: ExecSugid,
 }
 
 /// Generate a Seatbelt profile from the given parameters
@@ -127,7 +129,28 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
     profile.push_str("; Process operations\n");
     profile.push_str("(allow process-fork)\n");
     profile.push_str("(allow process-exec)\n");
-    profile.push_str("(allow signal)\n\n");
+    profile.push_str("(allow signal)\n");
+
+    // Setuid/setgid execution rules
+    match &params.allow_exec_sugid {
+        ExecSugid::Allow(true) => {
+            profile.push_str("; Setuid/setgid execution (allow all)\n");
+            profile.push_str("(allow process-exec* (with no-sandbox))\n");
+        }
+        ExecSugid::Paths(paths) if !paths.is_empty() => {
+            profile.push_str("; Setuid/setgid execution (specific binaries)\n");
+            for path in paths {
+                let validated = validate_seatbelt_path(path)?;
+                profile.push_str(&format!(
+                    "(allow process-exec (with no-sandbox) (literal \"{validated}\"))\n"
+                ));
+            }
+        }
+        _ => {
+            profile.push_str("; Setuid/setgid execution denied (default)\n");
+        }
+    }
+    profile.push('\n');
 
     // System operations required for macOS to function
     profile.push_str("; System operations\n");
@@ -618,5 +641,100 @@ mod tests {
         };
         let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(profile.contains("; Directory listing only"));
+    }
+
+    // === Setuid/Setgid Execution Tests ===
+
+    #[test]
+    fn test_exec_sugid_default_deny_produces_comment() {
+        let params = SandboxParams::default();
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(
+            profile.contains("; Setuid/setgid execution denied (default)"),
+            "Default deny should produce comment, got:\n{}",
+            profile
+        );
+        assert!(
+            !profile.contains("(allow process-exec* (with no-sandbox))"),
+            "Default deny should NOT allow sugid execution"
+        );
+    }
+
+    #[test]
+    fn test_exec_sugid_allow_all() {
+        let params = SandboxParams {
+            allow_exec_sugid: ExecSugid::Allow(true),
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(
+            profile.contains("(allow process-exec* (with no-sandbox))"),
+            "Allow(true) should emit global sugid allow, got:\n{}",
+            profile
+        );
+    }
+
+    #[test]
+    fn test_exec_sugid_specific_paths() {
+        let params = SandboxParams {
+            allow_exec_sugid: ExecSugid::Paths(vec!["/bin/ps".into(), "/usr/bin/newgrp".into()]),
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(
+            profile.contains(r#"(allow process-exec (with no-sandbox) (literal "/bin/ps"))"#),
+            "Should emit literal rule for /bin/ps, got:\n{}",
+            profile
+        );
+        assert!(
+            profile
+                .contains(r#"(allow process-exec (with no-sandbox) (literal "/usr/bin/newgrp"))"#),
+            "Should emit literal rule for /usr/bin/newgrp, got:\n{}",
+            profile
+        );
+    }
+
+    #[test]
+    fn test_exec_sugid_empty_paths_produces_comment() {
+        let params = SandboxParams {
+            allow_exec_sugid: ExecSugid::Paths(vec![]),
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(
+            profile.contains("; Setuid/setgid execution denied (default)"),
+            "Empty paths should produce deny comment"
+        );
+    }
+
+    #[test]
+    fn test_exec_sugid_invalid_path_rejected() {
+        let params = SandboxParams {
+            allow_exec_sugid: ExecSugid::Paths(vec!["/bin/ps\"/evil".into()]),
+            ..Default::default()
+        };
+        let result = generate_seatbelt_profile(&params);
+        assert!(result.is_err(), "Path with double quote should be rejected");
+    }
+
+    #[test]
+    fn test_exec_sugid_rules_after_process_exec() {
+        let params = SandboxParams {
+            allow_exec_sugid: ExecSugid::Paths(vec!["/bin/ps".into()]),
+            ..Default::default()
+        };
+        let profile = generate_seatbelt_profile(&params).unwrap();
+
+        let exec_pos = profile
+            .find("(allow process-exec)")
+            .expect("process-exec should exist");
+        let sugid_pos = profile
+            .find(r#"(allow process-exec (with no-sandbox) (literal "/bin/ps"))"#)
+            .expect("sugid rule should exist");
+
+        assert!(
+            sugid_pos > exec_pos,
+            "sugid rules must come after process-exec"
+        );
     }
 }

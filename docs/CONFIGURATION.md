@@ -13,6 +13,7 @@ default_profiles = ["base"]      # always include these
 shell = "/bin/zsh"               # shell inside sandbox
 prompt_indicator = true          # show [sx:mode] in prompt
 inherit_base = true              # include base profile
+# allow_exec_sugid = ["/bin/ps"] # allow specific setuid/setgid binaries
 
 [filesystem]
 allow_read = [
@@ -49,6 +50,7 @@ profiles = ["rust"]              # profiles for this project
 network = "localhost"            # override network mode
 inherit_global = true            # inherit from global config
 inherit_base = true              # include base profile (false for full custom)
+# allow_exec_sugid = ["/bin/ps"] # allow specific setuid/setgid binaries
 
 [filesystem]
 allow_read = ["./vendor"]
@@ -77,6 +79,32 @@ pass_env = ["MYPROJECT_TOKEN"]
 ```
 
 Use with `sx myproject -- command`.
+
+## Setuid/Setgid Execution
+
+Some binaries like `/bin/ps` are setuid/setgid. Seatbelt blocks these by default with `forbidden-exec-sugid`. Use `allow_exec_sugid` to opt in.
+
+Three modes:
+
+| Value | Effect |
+|-------|--------|
+| `false` (default) | Deny all setuid/setgid execution |
+| `true` | Allow all setuid/setgid execution |
+| `["/bin/ps"]` | Allow only listed binaries |
+
+```toml
+# .sandbox.toml
+[sandbox]
+allow_exec_sugid = ["/bin/ps", "/usr/bin/newgrp"]
+```
+
+CLI flag (repeatable, path-based only):
+
+```bash
+sx --allow-exec-sugid /bin/ps --allow-exec-sugid /usr/bin/newgrp -- ps aux
+```
+
+**Merge semantics:** when both global and project configs specify path lists, paths are unioned. Otherwise project overrides global.
 
 ## Precedence
 
