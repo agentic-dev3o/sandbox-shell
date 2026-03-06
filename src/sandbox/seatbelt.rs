@@ -262,12 +262,17 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
     profile.push_str("(allow file-read* (regex #\"^/dev/ttys[0-9]+$\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/dtracehelper\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/autofs_nowait\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/stdin\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/stdout\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/stderr\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/null\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/zero\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/tty\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/ptmx\"))\n");
     profile.push_str("(allow file-write* (regex #\"^/dev/ttys[0-9]+$\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/dtracehelper\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/stdout\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/stderr\"))\n");
     // Pseudo-tty is required for interactive terminal features (backspace, arrow keys, etc.)
     profile.push_str("(allow pseudo-tty)\n\n");
 
@@ -606,6 +611,11 @@ mod tests {
         assert!(profile.contains("(allow file-write* (literal \"/dev/null\"))"));
         assert!(profile.contains("(allow file-write* (literal \"/dev/tty\"))"));
         assert!(profile.contains("(allow file-read* (literal \"/dev/urandom\"))"));
+        assert!(profile.contains("(allow file-read* (literal \"/dev/stdin\"))"));
+        assert!(profile.contains("(allow file-read* (literal \"/dev/stdout\"))"));
+        assert!(profile.contains("(allow file-read* (literal \"/dev/stderr\"))"));
+        assert!(profile.contains("(allow file-write* (literal \"/dev/stdout\"))"));
+        assert!(profile.contains("(allow file-write* (literal \"/dev/stderr\"))"));
         assert!(profile.contains("(allow pseudo-tty)"));
     }
 

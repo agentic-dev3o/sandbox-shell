@@ -344,10 +344,7 @@ mod tests {
             "MY_SECRET_VALUE",
             &["*_SECRET*".to_string()]
         ));
-        assert!(!matches_env_pattern(
-            "MY_VALUE",
-            &["*_SECRET*".to_string()]
-        ));
+        assert!(!matches_env_pattern("MY_VALUE", &["*_SECRET*".to_string()]));
     }
 
     #[test]
