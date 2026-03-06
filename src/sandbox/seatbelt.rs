@@ -106,6 +106,12 @@ pub struct SandboxParams {
     pub raw_rules: Option<String>,
     /// Allow execution of setuid/setgid binaries
     pub allow_exec_sugid: ExecSugid,
+    /// Environment variables to pass through (glob patterns supported)
+    pub pass_env: Vec<String>,
+    /// Environment variables to deny (glob patterns, takes precedence over pass_env)
+    pub deny_env: Vec<String>,
+    /// Environment variables to explicitly set
+    pub set_env: std::collections::HashMap<String, String>,
 }
 
 /// Generate a Seatbelt profile from the given parameters
@@ -129,14 +135,10 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
     profile.push_str("; Process operations\n");
     profile.push_str("(allow process-fork)\n");
     profile.push_str("(allow process-exec)\n");
-    profile.push_str("(allow signal)\n");
+    profile.push_str("(allow signal (target self))\n");
 
     // Setuid/setgid execution rules
     match &params.allow_exec_sugid {
-        ExecSugid::Allow(true) => {
-            profile.push_str("; Setuid/setgid execution (allow all)\n");
-            profile.push_str("(allow process-exec* (with no-sandbox))\n");
-        }
         ExecSugid::Paths(paths) if !paths.is_empty() => {
             profile.push_str("; Setuid/setgid execution (specific binaries)\n");
             for path in paths {
@@ -158,9 +160,11 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
     profile.push_str("(allow file-ioctl)\n");
     profile.push_str("(allow user-preference-read)\n\n");
 
-    // Mach services required for system functionality
+    // Mach services - restricted to lookup and task-name only
+    // Blocks mach-register (service impersonation) and mach-priv-* (privilege escalation)
     profile.push_str("; Mach services\n");
-    profile.push_str("(allow mach*)\n\n");
+    profile.push_str("(allow mach-lookup)\n");
+    profile.push_str("(allow mach-task-name)\n\n");
 
     // IPC for Unix sockets (needed for DNS resolution via mDNSResponder)
     profile.push_str("; IPC (Unix sockets)\n");
@@ -247,10 +251,28 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
         profile.push('\n');
     }
 
-    // Device access (stdout, stderr, tty)
+    // Device access - restricted to specific devices needed for shell/terminal operation
     profile.push_str("; Device access\n");
-    profile.push_str("(allow file-write* (subpath \"/dev\"))\n");
-    profile.push_str("(allow file-read* (subpath \"/dev\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/null\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/zero\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/random\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/urandom\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/tty\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/ptmx\"))\n");
+    profile.push_str("(allow file-read* (regex #\"^/dev/ttys[0-9]+$\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/dtracehelper\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/autofs_nowait\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/stdin\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/stdout\"))\n");
+    profile.push_str("(allow file-read* (literal \"/dev/stderr\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/null\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/zero\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/tty\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/ptmx\"))\n");
+    profile.push_str("(allow file-write* (regex #\"^/dev/ttys[0-9]+$\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/dtracehelper\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/stdout\"))\n");
+    profile.push_str("(allow file-write* (literal \"/dev/stderr\"))\n");
     // Pseudo-tty is required for interactive terminal features (backspace, arrow keys, etc.)
     profile.push_str("(allow pseudo-tty)\n\n");
 
@@ -543,6 +565,61 @@ mod tests {
     }
 
     #[test]
+    fn test_mach_restricted() {
+        let params = SandboxParams::default();
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(
+            !profile.contains("(allow mach*)"),
+            "Should not allow unrestricted Mach IPC"
+        );
+        assert!(
+            profile.contains("(allow mach-lookup)"),
+            "Should allow Mach service lookups"
+        );
+        assert!(
+            profile.contains("(allow mach-task-name)"),
+            "Should allow Mach task name"
+        );
+    }
+
+    #[test]
+    fn test_signal_restricted_to_self() {
+        let params = SandboxParams::default();
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(
+            profile.contains("(allow signal (target self))"),
+            "Signal should be restricted to self"
+        );
+        assert!(
+            !profile.contains("(allow signal)\n"),
+            "Unrestricted signal should not be present"
+        );
+    }
+
+    #[test]
+    fn test_dev_access_restricted() {
+        let params = SandboxParams::default();
+        let profile = generate_seatbelt_profile(&params).unwrap();
+        assert!(
+            !profile.contains("(allow file-write* (subpath \"/dev\"))"),
+            "Should not allow writes to all of /dev"
+        );
+        assert!(
+            !profile.contains("(allow file-read* (subpath \"/dev\"))"),
+            "Should not allow reads from all of /dev"
+        );
+        assert!(profile.contains("(allow file-write* (literal \"/dev/null\"))"));
+        assert!(profile.contains("(allow file-write* (literal \"/dev/tty\"))"));
+        assert!(profile.contains("(allow file-read* (literal \"/dev/urandom\"))"));
+        assert!(profile.contains("(allow file-read* (literal \"/dev/stdin\"))"));
+        assert!(profile.contains("(allow file-read* (literal \"/dev/stdout\"))"));
+        assert!(profile.contains("(allow file-read* (literal \"/dev/stderr\"))"));
+        assert!(profile.contains("(allow file-write* (literal \"/dev/stdout\"))"));
+        assert!(profile.contains("(allow file-write* (literal \"/dev/stderr\"))"));
+        assert!(profile.contains("(allow pseudo-tty)"));
+    }
+
+    #[test]
     fn test_network_offline() {
         let params = SandboxParams {
             network_mode: NetworkMode::Offline,
@@ -661,17 +738,18 @@ mod tests {
     }
 
     #[test]
-    fn test_exec_sugid_allow_all() {
+    fn test_exec_sugid_true_is_safe() {
+        // Even if someone has allow_exec_sugid = true in old config, it must NOT produce no-sandbox rule
         let params = SandboxParams {
-            allow_exec_sugid: ExecSugid::Allow(true),
+            allow_exec_sugid: ExecSugid::Deny(true),
             ..Default::default()
         };
         let profile = generate_seatbelt_profile(&params).unwrap();
         assert!(
-            profile.contains("(allow process-exec* (with no-sandbox))"),
-            "Allow(true) should emit global sugid allow, got:\n{}",
-            profile
+            !profile.contains("(allow process-exec* (with no-sandbox))"),
+            "Deny(true) must NOT emit global sugid allow"
         );
+        assert!(profile.contains("; Setuid/setgid execution denied (default)"));
     }
 
     #[test]

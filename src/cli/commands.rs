@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use super::args::Args;
 use crate::config::project::{load_project_config, PROJECT_CONFIG_NAME};
 use crate::config::{
-    compose_profiles, load_global_config, load_profiles, merge_configs, Config, ExecSugid,
-    NetworkMode, Profile,
+    compose_profiles, load_global_config, load_profiles, merge_configs, merge_unique, Config,
+    ExecSugid, NetworkMode, Profile,
 };
 use crate::detection::project_type::detect_project_types;
 use crate::sandbox::executor::execute_sandboxed_with_trace;
@@ -46,7 +46,6 @@ pub fn explain(args: &Args) -> Result<()> {
 
     // Exec sugid
     match &context.params.allow_exec_sugid {
-        ExecSugid::Allow(true) => println!("Setuid/Setgid Execution: ALLOW ALL"),
         ExecSugid::Paths(paths) if !paths.is_empty() => {
             println!("Setuid/Setgid Execution: specific binaries");
             for path in paths {
@@ -331,6 +330,15 @@ fn build_sandbox_params(
     // Build raw rules if present
     let raw_rules = profile.seatbelt.as_ref().and_then(|s| s.raw.clone());
 
+    // Collect shell env config from profile and config
+    let mut pass_env = config.shell.pass_env.clone();
+    merge_unique(&mut pass_env, &profile.shell.pass_env);
+
+    let mut deny_env = config.shell.deny_env.clone();
+    merge_unique(&mut deny_env, &profile.shell.deny_env);
+
+    let set_env = config.shell.set_env.clone();
+
     SandboxParams {
         working_dir,
         home_dir,
@@ -341,6 +349,9 @@ fn build_sandbox_params(
         allow_list_dirs: allow_list_dirs.into_iter().map(PathBuf::from).collect(),
         raw_rules,
         allow_exec_sugid,
+        pass_env,
+        deny_env,
+        set_env,
     }
 }
 

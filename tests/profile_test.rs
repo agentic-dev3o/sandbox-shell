@@ -268,15 +268,15 @@ fn test_builtin_profile_opencode() {
 #[test]
 fn test_compose_profiles_exec_sugid_last_bool_wins() {
     let p1 = Profile {
-        allow_exec_sugid: Some(ExecSugid::Allow(true)),
+        allow_exec_sugid: Some(ExecSugid::Deny(true)),
         ..Default::default()
     };
     let p2 = Profile {
-        allow_exec_sugid: Some(ExecSugid::Allow(false)),
+        allow_exec_sugid: Some(ExecSugid::Deny(false)),
         ..Default::default()
     };
     let composed = compose_profiles(&[p1, p2]);
-    assert_eq!(composed.allow_exec_sugid, Some(ExecSugid::Allow(false)));
+    assert_eq!(composed.allow_exec_sugid, Some(ExecSugid::Deny(false)));
 }
 
 #[test]
@@ -317,17 +317,17 @@ fn test_compose_profiles_exec_sugid_none_inherits() {
 }
 
 #[test]
-fn test_compose_profiles_exec_sugid_bool_overrides_paths() {
+fn test_compose_profiles_exec_sugid_deny_overrides_paths() {
     let p1 = Profile {
         allow_exec_sugid: Some(ExecSugid::Paths(vec!["/bin/ps".into()])),
         ..Default::default()
     };
     let p2 = Profile {
-        allow_exec_sugid: Some(ExecSugid::Allow(true)),
+        allow_exec_sugid: Some(ExecSugid::Deny(false)),
         ..Default::default()
     };
     let composed = compose_profiles(&[p1, p2]);
-    assert_eq!(composed.allow_exec_sugid, Some(ExecSugid::Allow(true)));
+    assert_eq!(composed.allow_exec_sugid, Some(ExecSugid::Deny(false)));
 }
 
 // === Seatbelt Profile Compose Tests ===

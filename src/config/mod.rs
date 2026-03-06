@@ -6,6 +6,7 @@ pub mod schema;
 
 pub use global::load_global_config;
 pub use merge::merge_configs;
+pub(crate) use profile::merge_unique;
 pub use profile::{
     compose_profiles, load_profile, load_profiles, BuiltinProfile, Profile, ProfileError,
     ProfileFilesystem, ProfileShell,

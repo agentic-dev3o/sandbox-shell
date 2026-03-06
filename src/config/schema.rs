@@ -8,22 +8,21 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ExecSugid {
-    /// Allow all (`true`) or deny all (`false`)
-    Allow(bool),
+    /// Deny all (`false`) - the only boolean value accepted
+    Deny(bool),
     /// Allow only specific binary paths
     Paths(Vec<String>),
 }
 
 impl Default for ExecSugid {
     fn default() -> Self {
-        ExecSugid::Allow(false)
+        ExecSugid::Deny(false)
     }
 }
 
 impl ExecSugid {
-    /// Returns true if this is the default deny-all policy
     pub fn is_default(&self) -> bool {
-        matches!(self, ExecSugid::Allow(false))
+        matches!(self, ExecSugid::Deny(false))
     }
 }
 
@@ -140,14 +139,14 @@ mod tests {
 
     #[test]
     fn test_exec_sugid_default_is_deny() {
-        assert_eq!(ExecSugid::default(), ExecSugid::Allow(false));
+        assert_eq!(ExecSugid::default(), ExecSugid::Deny(false));
         assert!(ExecSugid::default().is_default());
     }
 
     #[test]
     fn test_exec_sugid_is_default() {
-        assert!(ExecSugid::Allow(false).is_default());
-        assert!(!ExecSugid::Allow(true).is_default());
+        assert!(ExecSugid::Deny(false).is_default());
+        assert!(!ExecSugid::Deny(true).is_default());
         assert!(!ExecSugid::Paths(vec!["/bin/ps".into()]).is_default());
     }
 
@@ -163,12 +162,13 @@ mod tests {
 
     #[test]
     fn test_exec_sugid_deserialize_false() {
-        assert_eq!(parse_exec_sugid("value = false"), ExecSugid::Allow(false));
+        assert_eq!(parse_exec_sugid("value = false"), ExecSugid::Deny(false));
     }
 
     #[test]
-    fn test_exec_sugid_deserialize_true() {
-        assert_eq!(parse_exec_sugid("value = true"), ExecSugid::Allow(true));
+    fn test_exec_sugid_deserialize_true_is_safe() {
+        // Old configs with `true` silently degrade to Deny(true) which is safe
+        assert_eq!(parse_exec_sugid("value = true"), ExecSugid::Deny(true));
     }
 
     #[test]
@@ -188,19 +188,7 @@ allow_exec_sugid = false
 "#,
         )
         .unwrap();
-        assert_eq!(config.sandbox.allow_exec_sugid, ExecSugid::Allow(false));
-    }
-
-    #[test]
-    fn test_sandbox_config_with_exec_sugid_true() {
-        let config: Config = toml::from_str(
-            r#"
-[sandbox]
-allow_exec_sugid = true
-"#,
-        )
-        .unwrap();
-        assert_eq!(config.sandbox.allow_exec_sugid, ExecSugid::Allow(true));
+        assert_eq!(config.sandbox.allow_exec_sugid, ExecSugid::Deny(false));
     }
 
     #[test]

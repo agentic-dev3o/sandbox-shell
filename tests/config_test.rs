@@ -519,20 +519,20 @@ allow_exec_sugid = ["/bin/ps"]
 fn test_merge_exec_sugid_project_overrides_global() {
     let global = Config {
         sandbox: SandboxConfig {
-            allow_exec_sugid: ExecSugid::Allow(false),
+            allow_exec_sugid: ExecSugid::Deny(false),
             ..Default::default()
         },
         ..Default::default()
     };
     let project = Config {
         sandbox: SandboxConfig {
-            allow_exec_sugid: ExecSugid::Allow(true),
+            allow_exec_sugid: ExecSugid::Deny(true),
             ..Default::default()
         },
         ..Default::default()
     };
     let merged = merge_configs(&global, &project);
-    assert_eq!(merged.sandbox.allow_exec_sugid, ExecSugid::Allow(true));
+    assert_eq!(merged.sandbox.allow_exec_sugid, ExecSugid::Deny(true));
 }
 
 #[test]
@@ -562,7 +562,7 @@ fn test_merge_exec_sugid_paths_union() {
 }
 
 #[test]
-fn test_merge_exec_sugid_paths_override_by_bool() {
+fn test_merge_exec_sugid_paths_override_by_deny() {
     let global = Config {
         sandbox: SandboxConfig {
             allow_exec_sugid: ExecSugid::Paths(vec!["/bin/ps".into()]),
@@ -572,13 +572,13 @@ fn test_merge_exec_sugid_paths_override_by_bool() {
     };
     let project = Config {
         sandbox: SandboxConfig {
-            allow_exec_sugid: ExecSugid::Allow(true),
+            allow_exec_sugid: ExecSugid::Deny(true),
             ..Default::default()
         },
         ..Default::default()
     };
     let merged = merge_configs(&global, &project);
-    assert_eq!(merged.sandbox.allow_exec_sugid, ExecSugid::Allow(true));
+    assert_eq!(merged.sandbox.allow_exec_sugid, ExecSugid::Deny(true));
 }
 
 #[test]
