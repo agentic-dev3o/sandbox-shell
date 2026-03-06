@@ -109,6 +109,9 @@ pub fn execute_sandboxed_with_trace(
     let mut cmd = Command::new("/usr/bin/sandbox-exec");
     cmd.arg("-f").arg(profile_file.path());
 
+    // Apply environment filtering (clears env, then selectively passes through)
+    apply_env_filter(&mut cmd, params);
+
     // Set SANDBOX_MODE environment variable for shell prompt integration
     let mode_str = match params.network_mode {
         crate::config::schema::NetworkMode::Offline => "offline",
@@ -198,6 +201,10 @@ pub fn execute_sandboxed_captured(
     // Build sandbox-exec command
     let mut cmd = Command::new("/usr/bin/sandbox-exec");
     cmd.arg("-f").arg(profile_file.path());
+
+    // Apply environment filtering
+    apply_env_filter(&mut cmd, params);
+
     cmd.args(command);
 
     let output = cmd.output()?;
@@ -208,6 +215,81 @@ pub fn execute_sandboxed_captured(
 /// Print the generated seatbelt profile (dry-run mode)
 pub fn dry_run(params: &SandboxParams) -> Result<String, SeatbeltError> {
     generate_seatbelt_profile(params)
+}
+
+/// Check if an environment variable name matches any glob-like pattern.
+/// Supports `*` wildcards: `AWS_*` matches `AWS_SECRET_KEY`, `*_SECRET*` matches `MY_SECRET_VALUE`.
+fn matches_env_pattern(name: &str, patterns: &[String]) -> bool {
+    for pattern in patterns {
+        if pattern == name {
+            return true;
+        }
+        if pattern.contains('*') {
+            let parts: Vec<&str> = pattern.split('*').collect();
+            let mut pos = 0;
+            let mut matched = true;
+            for (i, part) in parts.iter().enumerate() {
+                if part.is_empty() {
+                    continue;
+                }
+                if i == 0 {
+                    if !name.starts_with(part) {
+                        matched = false;
+                        break;
+                    }
+                    pos = part.len();
+                } else if let Some(found) = name[pos..].find(part) {
+                    pos += found + part.len();
+                } else {
+                    matched = false;
+                    break;
+                }
+            }
+            if matched && !pattern.ends_with('*') {
+                if let Some(last) = parts.last() {
+                    if !last.is_empty() && !name.ends_with(last) {
+                        matched = false;
+                    }
+                }
+            }
+            if matched {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Apply environment filtering to a Command.
+/// Clears all env, then selectively passes through allowed vars.
+fn apply_env_filter(cmd: &mut Command, params: &SandboxParams) {
+    const DANGEROUS_PREFIXES: &[&str] = &["DYLD_"];
+
+    cmd.env_clear();
+
+    let parent_env: std::collections::HashMap<String, String> = std::env::vars().collect();
+
+    for (key, value) in &parent_env {
+        if DANGEROUS_PREFIXES.iter().any(|p| key.starts_with(p)) {
+            continue;
+        }
+        if matches_env_pattern(key, &params.deny_env) {
+            continue;
+        }
+        if params.pass_env.is_empty() || matches_env_pattern(key, &params.pass_env) {
+            cmd.env(key, value);
+        }
+    }
+
+    for (key, value) in &params.set_env {
+        if DANGEROUS_PREFIXES.iter().any(|p| key.starts_with(p)) {
+            continue;
+        }
+        if matches_env_pattern(key, &params.deny_env) {
+            continue;
+        }
+        cmd.env(key, value);
+    }
 }
 
 #[cfg(test)]
@@ -239,5 +321,49 @@ mod tests {
 
         let result = dry_run(&params);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_matches_env_pattern_exact() {
+        assert!(matches_env_pattern("HOME", &["HOME".to_string()]));
+        assert!(!matches_env_pattern("HOME", &["PATH".to_string()]));
+    }
+
+    #[test]
+    fn test_matches_env_pattern_prefix_wildcard() {
+        assert!(matches_env_pattern(
+            "AWS_SECRET_KEY",
+            &["AWS_*".to_string()]
+        ));
+        assert!(!matches_env_pattern("HOME", &["AWS_*".to_string()]));
+    }
+
+    #[test]
+    fn test_matches_env_pattern_contains_wildcard() {
+        assert!(matches_env_pattern(
+            "MY_SECRET_VALUE",
+            &["*_SECRET*".to_string()]
+        ));
+        assert!(!matches_env_pattern(
+            "MY_VALUE",
+            &["*_SECRET*".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_matches_env_pattern_suffix_wildcard() {
+        assert!(matches_env_pattern("GITHUB_KEY", &["*_KEY".to_string()]));
+        assert!(!matches_env_pattern(
+            "GITHUB_KEY_EXTRA",
+            &["*_KEY".to_string()]
+        ));
+    }
+
+    #[test]
+    fn test_matches_env_pattern_dyld_always_dangerous() {
+        assert!(matches_env_pattern(
+            "DYLD_INSERT_LIBRARIES",
+            &["DYLD_*".to_string()]
+        ));
     }
 }

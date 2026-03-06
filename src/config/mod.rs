@@ -10,5 +10,6 @@ pub use profile::{
     compose_profiles, load_profile, load_profiles, BuiltinProfile, Profile, ProfileError,
     ProfileFilesystem, ProfileShell,
 };
+pub(crate) use profile::merge_unique;
 pub use project::load_project_config;
 pub use schema::{Config, ExecSugid, NetworkMode};
