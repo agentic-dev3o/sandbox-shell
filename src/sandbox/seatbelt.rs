@@ -253,12 +253,15 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
 
     // Device access - restricted to specific devices needed for shell/terminal operation
     profile.push_str("; Device access\n");
+    profile.push_str("(allow file-read-data (literal \"/dev\"))\n");
+    profile.push_str("(allow file-read-data (literal \"/dev/fd\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/null\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/zero\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/random\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/urandom\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/tty\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/ptmx\"))\n");
+    profile.push_str("(allow file-read* (regex #\"^/dev/fd/[0-9]+$\"))\n");
     profile.push_str("(allow file-read* (regex #\"^/dev/ttys[0-9]+$\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/dtracehelper\"))\n");
     profile.push_str("(allow file-read* (literal \"/dev/autofs_nowait\"))\n");
@@ -269,6 +272,7 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
     profile.push_str("(allow file-write* (literal \"/dev/zero\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/tty\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/ptmx\"))\n");
+    profile.push_str("(allow file-write* (regex #\"^/dev/fd/[0-9]+$\"))\n");
     profile.push_str("(allow file-write* (regex #\"^/dev/ttys[0-9]+$\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/dtracehelper\"))\n");
     profile.push_str("(allow file-write* (literal \"/dev/stdout\"))\n");
@@ -608,14 +612,18 @@ mod tests {
             !profile.contains("(allow file-read* (subpath \"/dev\"))"),
             "Should not allow reads from all of /dev"
         );
+        assert!(profile.contains("(allow file-read-data (literal \"/dev\"))"));
+        assert!(profile.contains("(allow file-read-data (literal \"/dev/fd\"))"));
         assert!(profile.contains("(allow file-write* (literal \"/dev/null\"))"));
         assert!(profile.contains("(allow file-write* (literal \"/dev/tty\"))"));
         assert!(profile.contains("(allow file-read* (literal \"/dev/urandom\"))"));
         assert!(profile.contains("(allow file-read* (literal \"/dev/stdin\"))"));
         assert!(profile.contains("(allow file-read* (literal \"/dev/stdout\"))"));
         assert!(profile.contains("(allow file-read* (literal \"/dev/stderr\"))"));
+        assert!(profile.contains("(allow file-read* (regex #\"^/dev/fd/[0-9]+$\"))"));
         assert!(profile.contains("(allow file-write* (literal \"/dev/stdout\"))"));
         assert!(profile.contains("(allow file-write* (literal \"/dev/stderr\"))"));
+        assert!(profile.contains("(allow file-write* (regex #\"^/dev/fd/[0-9]+$\"))"));
         assert!(profile.contains("(allow pseudo-tty)"));
     }
 

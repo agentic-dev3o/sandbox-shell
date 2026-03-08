@@ -3,6 +3,7 @@
 //! Wires together config loading, profile composition, and sandbox execution.
 
 use anyhow::{Context, Result};
+use std::collections::HashSet;
 use std::env;
 use std::path::{Path, PathBuf};
 
@@ -295,10 +296,24 @@ fn build_sandbox_params(
     let mut deny_read = collect_deny_read_paths(config, profile, &args.deny_read);
     let mut allow_write = collect_allow_write_paths(config, profile, &args.allow_write);
     let mut allow_list_dirs = collect_allow_list_dirs_paths(config, profile);
+    let has_configured_list_dirs = !allow_list_dirs.is_empty();
+
+    if args.command.is_none() {
+        let shell_path = config
+            .sandbox
+            .shell
+            .clone()
+            .or_else(|| std::env::var("SHELL").ok())
+            .unwrap_or_else(|| "/bin/zsh".to_string());
+        let path_env = std::env::var("PATH").ok();
+        let shell_list_dirs =
+            collect_interactive_shell_list_dirs(&home_dir, &shell_path, path_env.as_deref());
+        merge_unique(&mut allow_list_dirs, &shell_list_dirs);
+    }
 
     // If allow_list_dirs is configured, add all parent directories of working_dir
     // This is needed for runtimes like Bun that scan ALL parent directories
-    if !allow_list_dirs.is_empty() {
+    if has_configured_list_dirs {
         let mut parent = working_dir.parent();
         while let Some(p) = parent {
             let path_str = p.to_string_lossy().to_string();
@@ -425,6 +440,37 @@ fn collect_allow_list_dirs_paths(config: &Config, profile: &Profile) -> Vec<Stri
     paths
 }
 
+fn collect_interactive_shell_list_dirs(
+    home_dir: &Path,
+    shell_path: &str,
+    path_env: Option<&str>,
+) -> Vec<String> {
+    let mut dirs = Vec::new();
+
+    if let Some(path_env) = path_env {
+        for entry in std::env::split_paths(path_env) {
+            if !entry.as_os_str().is_empty() {
+                dirs.push(entry.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    if shell_path.ends_with("zsh") {
+        dirs.push(home_dir.join(".config/zsh").to_string_lossy().to_string());
+        dirs.push(
+            home_dir
+                .join(".config/zsh/completions")
+                .to_string_lossy()
+                .to_string(),
+        );
+    }
+
+    let mut seen = HashSet::new();
+    dirs.into_iter()
+        .filter(|dir| seen.insert(dir.clone()))
+        .collect()
+}
+
 /// Generate the default .sandbox.toml template
 fn generate_config_template() -> &'static str {
     r#"# .sandbox.toml
@@ -530,5 +576,33 @@ mod tests {
 
         let mode = determine_network_mode(&args, &profile, &config);
         assert_eq!(mode, NetworkMode::Localhost);
+    }
+
+    #[test]
+    fn test_collect_interactive_shell_list_dirs_adds_path_entries() {
+        let home_dir = Path::new("/Users/testuser");
+        let dirs = collect_interactive_shell_list_dirs(
+            home_dir,
+            "/bin/bash",
+            Some("/usr/local/bin:/opt/homebrew/bin:/usr/local/bin"),
+        );
+
+        assert!(dirs.contains(&"/usr/local/bin".to_string()));
+        assert!(dirs.contains(&"/opt/homebrew/bin".to_string()));
+        assert_eq!(
+            dirs.iter()
+                .filter(|d| d.as_str() == "/usr/local/bin")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_collect_interactive_shell_list_dirs_adds_zsh_dirs() {
+        let home_dir = Path::new("/Users/testuser");
+        let dirs = collect_interactive_shell_list_dirs(home_dir, "/bin/zsh", Some("/usr/bin"));
+
+        assert!(dirs.contains(&"/Users/testuser/.config/zsh".to_string()));
+        assert!(dirs.contains(&"/Users/testuser/.config/zsh/completions".to_string()));
     }
 }

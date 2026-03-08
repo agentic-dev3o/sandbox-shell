@@ -242,6 +242,62 @@ fn test_sandbox_temp_file_creation() {
     assert_eq!(String::from_utf8_lossy(&stdout).trim(), "temp data");
 }
 
+#[test]
+fn test_zsh_process_substitution_works() {
+    skip_if_no_sandbox!();
+
+    let temp = TempDir::new().unwrap();
+    let params = fs_sandbox_params(temp.path().to_path_buf());
+
+    let (status, stdout, stderr) = execute_sandboxed_captured(
+        &params,
+        &[
+            "/bin/zsh".to_string(),
+            "-c".to_string(),
+            "source <(printf 'echo zsh-process-substitution-ok\\n')".to_string(),
+        ],
+    )
+    .unwrap();
+
+    assert!(
+        status.success(),
+        "zsh process substitution should work: {}",
+        String::from_utf8_lossy(&stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&stdout).trim(),
+        "zsh-process-substitution-ok"
+    );
+}
+
+#[test]
+fn test_bash_process_substitution_works() {
+    skip_if_no_sandbox!();
+
+    let temp = TempDir::new().unwrap();
+    let params = fs_sandbox_params(temp.path().to_path_buf());
+
+    let (status, stdout, stderr) = execute_sandboxed_captured(
+        &params,
+        &[
+            "/bin/bash".to_string(),
+            "-c".to_string(),
+            "source <(printf 'echo bash-process-substitution-ok\\n')".to_string(),
+        ],
+    )
+    .unwrap();
+
+    assert!(
+        status.success(),
+        "bash process substitution should work: {}",
+        String::from_utf8_lossy(&stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&stdout).trim(),
+        "bash-process-substitution-ok"
+    );
+}
+
 // ============================================================================
 // Network Integration Tests
 // ============================================================================
