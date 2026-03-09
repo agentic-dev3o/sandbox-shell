@@ -229,21 +229,12 @@ pub fn load_profiles(names: &[String], custom_dir: Option<&Path>) -> Vec<Profile
                 }
             }
 
-            // Profile not found - warn and fallback to online
+            // Profile not found - error and skip (fail-closed)
             eprintln!(
-                "\x1b[33m[sx:warn]\x1b[0m Unknown profile '{}', falling back to 'online'",
+                "\x1b[31m[sx:error]\x1b[0m Unknown profile '{}', skipping (no fallback)",
                 name
             );
-            match BuiltinProfile::Online.load() {
-                Ok(profile) => Some(profile),
-                Err(e) => {
-                    eprintln!(
-                        "\x1b[31m[sx:error]\x1b[0m Failed to load fallback 'online' profile: {}",
-                        e
-                    );
-                    None
-                }
-            }
+            None
         })
         .collect()
 }
@@ -319,12 +310,48 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
 
 /// Merge unique strings from source into target.
 /// Uses HashSet for O(1) lookups instead of O(n) contains() checks.
-fn merge_unique(target: &mut Vec<String>, source: &[String]) {
+pub(crate) fn merge_unique(target: &mut Vec<String>, source: &[String]) {
     // Build set of existing items (owned strings to avoid borrow conflicts)
     let existing: HashSet<String> = target.iter().cloned().collect();
     for item in source {
         if !existing.contains(item) {
             target.push(item.clone());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unknown_profile_returns_none() {
+        let profiles = load_profiles(&["nonexistent_profile".to_string()], None);
+        assert!(
+            profiles.is_empty(),
+            "Unknown profile should not load any profile"
+        );
+    }
+
+    #[test]
+    fn test_known_builtin_profiles_load() {
+        for name in &[
+            "base",
+            "online",
+            "localhost",
+            "rust",
+            "claude",
+            "gpg",
+            "bun",
+            "opencode",
+        ] {
+            let profiles = load_profiles(&[name.to_string()], None);
+            assert_eq!(
+                profiles.len(),
+                1,
+                "Builtin profile '{}' should load successfully",
+                name
+            );
         }
     }
 }

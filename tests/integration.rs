@@ -84,6 +84,9 @@ fn fs_sandbox_params(working_dir: PathBuf) -> SandboxParams {
         allow_list_dirs: vec![],
         raw_rules: None,
         allow_exec_sugid: Default::default(),
+        pass_env: vec![],
+        deny_env: vec![],
+        set_env: Default::default(),
     }
 }
 
@@ -239,6 +242,62 @@ fn test_sandbox_temp_file_creation() {
     assert_eq!(String::from_utf8_lossy(&stdout).trim(), "temp data");
 }
 
+#[test]
+fn test_zsh_process_substitution_works() {
+    skip_if_no_sandbox!();
+
+    let temp = TempDir::new().unwrap();
+    let params = fs_sandbox_params(temp.path().to_path_buf());
+
+    let (status, stdout, stderr) = execute_sandboxed_captured(
+        &params,
+        &[
+            "/bin/zsh".to_string(),
+            "-c".to_string(),
+            "source <(printf 'echo zsh-process-substitution-ok\\n')".to_string(),
+        ],
+    )
+    .unwrap();
+
+    assert!(
+        status.success(),
+        "zsh process substitution should work: {}",
+        String::from_utf8_lossy(&stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&stdout).trim(),
+        "zsh-process-substitution-ok"
+    );
+}
+
+#[test]
+fn test_bash_process_substitution_works() {
+    skip_if_no_sandbox!();
+
+    let temp = TempDir::new().unwrap();
+    let params = fs_sandbox_params(temp.path().to_path_buf());
+
+    let (status, stdout, stderr) = execute_sandboxed_captured(
+        &params,
+        &[
+            "/bin/bash".to_string(),
+            "-c".to_string(),
+            "source <(printf 'echo bash-process-substitution-ok\\n')".to_string(),
+        ],
+    )
+    .unwrap();
+
+    assert!(
+        status.success(),
+        "bash process substitution should work: {}",
+        String::from_utf8_lossy(&stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&stdout).trim(),
+        "bash-process-substitution-ok"
+    );
+}
+
 // ============================================================================
 // Network Integration Tests
 // ============================================================================
@@ -261,6 +320,9 @@ fn network_sandbox_params(working_dir: PathBuf, mode: NetworkMode) -> SandboxPar
         allow_list_dirs: vec![],
         raw_rules: None,
         allow_exec_sugid: Default::default(),
+        pass_env: vec![],
+        deny_env: vec![],
+        set_env: Default::default(),
     }
 }
 
@@ -706,17 +768,11 @@ allow_write = ["/custom/write"]
 }
 
 #[test]
-fn test_load_missing_profile_falls_back_to_online() {
+fn test_load_missing_profile_skipped_fail_closed() {
     let profiles = load_profiles(&["nonexistent".to_string()], None);
-    assert_eq!(
-        profiles.len(),
-        1,
-        "Should return one profile (online fallback) for missing profile"
-    );
-    // Verify it's the online profile (has network_mode = Some(Online))
-    assert_eq!(
-        profiles[0].network_mode,
-        Some(sx::config::schema::NetworkMode::Online)
+    assert!(
+        profiles.is_empty(),
+        "Unknown profile should be skipped (fail-closed, no fallback)"
     );
 }
 

@@ -223,6 +223,22 @@ fn test_base_profile_integration() {
         profile.contains(r#"(allow file-read* (subpath "/usr"))"#),
         "Base profile should allow /usr"
     );
+    assert!(
+        !profile.contains(r#"(allow file-read* (subpath "/dev"))"#),
+        "Base profile should not re-introduce broad /dev reads"
+    );
+    assert!(
+        profile.contains(r#"(allow file-read-data (literal "/dev"))"#),
+        "Base profile should allow directory-only access to /dev"
+    );
+    assert!(
+        profile.contains(r#"(allow file-read-data (literal "/dev/fd"))"#),
+        "Base profile should allow directory-only access to /dev/fd"
+    );
+    assert!(
+        profile.contains(r#"(allow file-read* (literal "/dev/null"))"#),
+        "Base profile should keep the explicit device allowlist"
+    );
 }
 
 #[test]
