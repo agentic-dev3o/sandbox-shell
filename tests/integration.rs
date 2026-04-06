@@ -11,7 +11,8 @@ use std::process::Command;
 use sx::config::global::load_global_config;
 use sx::config::merge::merge_configs;
 use sx::config::profile::{
-    compose_profiles, load_profiles, BuiltinProfile, Profile, ProfileFilesystem, ProfileShell,
+    compose_profiles, load_profiles, BuiltinProfile, Profile, ProfileError, ProfileFilesystem,
+    ProfileShell,
 };
 use sx::config::project::load_project_config;
 use sx::config::project::PROJECT_CONFIG_NAME;
@@ -84,6 +85,9 @@ fn fs_sandbox_params(working_dir: PathBuf) -> SandboxParams {
         allow_list_dirs: vec![],
         raw_rules: None,
         allow_exec_sugid: Default::default(),
+        pass_env: vec![],
+        deny_env: vec![],
+        set_env: Default::default(),
     }
 }
 
@@ -239,6 +243,62 @@ fn test_sandbox_temp_file_creation() {
     assert_eq!(String::from_utf8_lossy(&stdout).trim(), "temp data");
 }
 
+#[test]
+fn test_zsh_process_substitution_works() {
+    skip_if_no_sandbox!();
+
+    let temp = TempDir::new().unwrap();
+    let params = fs_sandbox_params(temp.path().to_path_buf());
+
+    let (status, stdout, stderr) = execute_sandboxed_captured(
+        &params,
+        &[
+            "/bin/zsh".to_string(),
+            "-c".to_string(),
+            "source <(printf 'echo zsh-process-substitution-ok\\n')".to_string(),
+        ],
+    )
+    .unwrap();
+
+    assert!(
+        status.success(),
+        "zsh process substitution should work: {}",
+        String::from_utf8_lossy(&stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&stdout).trim(),
+        "zsh-process-substitution-ok"
+    );
+}
+
+#[test]
+fn test_bash_process_substitution_works() {
+    skip_if_no_sandbox!();
+
+    let temp = TempDir::new().unwrap();
+    let params = fs_sandbox_params(temp.path().to_path_buf());
+
+    let (status, stdout, stderr) = execute_sandboxed_captured(
+        &params,
+        &[
+            "/bin/bash".to_string(),
+            "-c".to_string(),
+            "source <(printf 'echo bash-process-substitution-ok\\n')".to_string(),
+        ],
+    )
+    .unwrap();
+
+    assert!(
+        status.success(),
+        "bash process substitution should work: {}",
+        String::from_utf8_lossy(&stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&stdout).trim(),
+        "bash-process-substitution-ok"
+    );
+}
+
 // ============================================================================
 // Network Integration Tests
 // ============================================================================
@@ -261,6 +321,9 @@ fn network_sandbox_params(working_dir: PathBuf, mode: NetworkMode) -> SandboxPar
         allow_list_dirs: vec![],
         raw_rules: None,
         allow_exec_sugid: Default::default(),
+        pass_env: vec![],
+        deny_env: vec![],
+        set_env: Default::default(),
     }
 }
 
@@ -543,7 +606,7 @@ fn test_load_all_builtin_profiles() {
     let builtin_names = ["base", "online", "localhost", "rust", "claude", "gpg"];
 
     for name in builtin_names {
-        let profiles = load_profiles(&[name.to_string()], None);
+        let profiles = load_profiles(&[name.to_string()], None).unwrap();
         assert_eq!(profiles.len(), 1, "Should load builtin profile: {}", name);
     }
 }
@@ -694,7 +757,7 @@ allow_write = ["/custom/write"]
     )
     .unwrap();
 
-    let profiles = load_profiles(&["custom".to_string()], Some(temp.path()));
+    let profiles = load_profiles(&["custom".to_string()], Some(temp.path())).unwrap();
     assert_eq!(profiles.len(), 1, "Should load custom profile");
 
     let profile = &profiles[0];
@@ -706,17 +769,11 @@ allow_write = ["/custom/write"]
 }
 
 #[test]
-fn test_load_missing_profile_falls_back_to_online() {
-    let profiles = load_profiles(&["nonexistent".to_string()], None);
-    assert_eq!(
-        profiles.len(),
-        1,
-        "Should return one profile (online fallback) for missing profile"
-    );
-    // Verify it's the online profile (has network_mode = Some(Online))
-    assert_eq!(
-        profiles[0].network_mode,
-        Some(sx::config::schema::NetworkMode::Online)
+fn test_load_missing_profile_returns_error() {
+    let result = load_profiles(&["nonexistent".to_string()], None);
+    assert!(
+        matches!(result, Err(ProfileError::NotFound { .. })),
+        "Unknown profile should return NotFound error"
     );
 }
 
