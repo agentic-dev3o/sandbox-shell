@@ -112,7 +112,7 @@ fn test_load_profile_not_found() {
 
 #[test]
 fn test_load_profiles_by_name() {
-    let profiles = load_profiles(&["base".to_string(), "online".to_string()], None);
+    let profiles = load_profiles(&["base".to_string(), "online".to_string()], None).unwrap();
     assert_eq!(profiles.len(), 2);
 }
 
@@ -130,7 +130,7 @@ allow_read = ["~/mypath"]
     )
     .unwrap();
 
-    let profiles = load_profiles(&["myprofile".to_string()], Some(temp_dir.path()));
+    let profiles = load_profiles(&["myprofile".to_string()], Some(temp_dir.path())).unwrap();
     assert_eq!(profiles.len(), 1);
     assert!(profiles[0]
         .filesystem

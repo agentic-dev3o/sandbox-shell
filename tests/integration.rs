@@ -11,7 +11,8 @@ use std::process::Command;
 use sx::config::global::load_global_config;
 use sx::config::merge::merge_configs;
 use sx::config::profile::{
-    compose_profiles, load_profiles, BuiltinProfile, Profile, ProfileFilesystem, ProfileShell,
+    compose_profiles, load_profiles, BuiltinProfile, Profile, ProfileError, ProfileFilesystem,
+    ProfileShell,
 };
 use sx::config::project::load_project_config;
 use sx::config::project::PROJECT_CONFIG_NAME;
@@ -605,7 +606,7 @@ fn test_load_all_builtin_profiles() {
     let builtin_names = ["base", "online", "localhost", "rust", "claude", "gpg"];
 
     for name in builtin_names {
-        let profiles = load_profiles(&[name.to_string()], None);
+        let profiles = load_profiles(&[name.to_string()], None).unwrap();
         assert_eq!(profiles.len(), 1, "Should load builtin profile: {}", name);
     }
 }
@@ -756,7 +757,7 @@ allow_write = ["/custom/write"]
     )
     .unwrap();
 
-    let profiles = load_profiles(&["custom".to_string()], Some(temp.path()));
+    let profiles = load_profiles(&["custom".to_string()], Some(temp.path())).unwrap();
     assert_eq!(profiles.len(), 1, "Should load custom profile");
 
     let profile = &profiles[0];
@@ -768,11 +769,11 @@ allow_write = ["/custom/write"]
 }
 
 #[test]
-fn test_load_missing_profile_skipped_fail_closed() {
-    let profiles = load_profiles(&["nonexistent".to_string()], None);
+fn test_load_missing_profile_returns_error() {
+    let result = load_profiles(&["nonexistent".to_string()], None);
     assert!(
-        profiles.is_empty(),
-        "Unknown profile should be skipped (fail-closed, no fallback)"
+        matches!(result, Err(ProfileError::NotFound { .. })),
+        "Unknown profile should return NotFound error"
     );
 }
 

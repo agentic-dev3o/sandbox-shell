@@ -15,6 +15,8 @@ pub enum ProfileError {
         name: &'static str,
         error: toml::de::Error,
     },
+    /// Profile name not found in any search location
+    NotFound { name: String },
 }
 
 impl std::fmt::Display for ProfileError {
@@ -25,6 +27,7 @@ impl std::fmt::Display for ProfileError {
             ProfileError::InvalidBuiltin { name, error } => {
                 write!(f, "Built-in profile '{}' is invalid: {}", name, error)
             }
+            ProfileError::NotFound { name } => write!(f, "Unknown profile '{}'", name),
         }
     }
 }
@@ -35,6 +38,7 @@ impl std::error::Error for ProfileError {
             ProfileError::Io(e) => Some(e),
             ProfileError::Parse(e) => Some(e),
             ProfileError::InvalidBuiltin { error, .. } => Some(error),
+            ProfileError::NotFound { .. } => None,
         }
     }
 }
@@ -168,42 +172,24 @@ pub fn load_profile(path: &Path) -> Result<Profile, ProfileError> {
 }
 
 /// Load profiles by name, optionally searching in a custom directory.
-/// Logs warnings for profiles that fail to load instead of silently skipping them.
-pub fn load_profiles(names: &[String], custom_dir: Option<&Path>) -> Vec<Profile> {
+/// Returns an error if any profile cannot be found or loaded.
+pub fn load_profiles(
+    names: &[String],
+    custom_dir: Option<&Path>,
+) -> Result<Vec<Profile>, ProfileError> {
     names
         .iter()
-        .filter_map(|name| {
+        .map(|name| {
             // First try builtin profiles
             if let Some(builtin) = BuiltinProfile::from_name(name) {
-                match builtin.load() {
-                    Ok(profile) => return Some(profile),
-                    Err(e) => {
-                        // This should never happen with properly tested builtin profiles
-                        eprintln!(
-                            "\x1b[31m[sx:error]\x1b[0m Failed to load builtin profile '{}': {}",
-                            name, e
-                        );
-                        return None;
-                    }
-                }
+                return builtin.load();
             }
 
             // Then try custom directory
             if let Some(dir) = custom_dir {
                 let path = dir.join(format!("{}.toml", name));
                 if path.exists() {
-                    match load_profile(&path) {
-                        Ok(profile) => return Some(profile),
-                        Err(e) => {
-                            eprintln!(
-                                "\x1b[33m[sx:warn]\x1b[0m Failed to load profile '{}' from {}: {}",
-                                name,
-                                path.display(),
-                                e
-                            );
-                            return None;
-                        }
-                    }
+                    return load_profile(&path);
                 }
             }
 
@@ -214,27 +200,11 @@ pub fn load_profiles(names: &[String], custom_dir: Option<&Path>) -> Vec<Profile
                     .join(".config/sx/profiles")
                     .join(format!("{}.toml", name));
                 if path.exists() {
-                    match load_profile(&path) {
-                        Ok(profile) => return Some(profile),
-                        Err(e) => {
-                            eprintln!(
-                                "\x1b[33m[sx:warn]\x1b[0m Failed to load profile '{}' from {}: {}",
-                                name,
-                                path.display(),
-                                e
-                            );
-                            return None;
-                        }
-                    }
+                    return load_profile(&path);
                 }
             }
 
-            // Profile not found - error and skip (fail-closed)
-            eprintln!(
-                "\x1b[31m[sx:error]\x1b[0m Unknown profile '{}', skipping (no fallback)",
-                name
-            );
-            None
+            Err(ProfileError::NotFound { name: name.clone() })
         })
         .collect()
 }
@@ -325,11 +295,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_unknown_profile_returns_none() {
-        let profiles = load_profiles(&["nonexistent_profile".to_string()], None);
+    fn test_unknown_profile_returns_error() {
+        let result = load_profiles(&["nonexistent_profile".to_string()], None);
         assert!(
-            profiles.is_empty(),
-            "Unknown profile should not load any profile"
+            matches!(result, Err(ProfileError::NotFound { .. })),
+            "Unknown profile should return NotFound error"
         );
     }
 
@@ -345,7 +315,7 @@ mod tests {
             "bun",
             "opencode",
         ] {
-            let profiles = load_profiles(&[name.to_string()], None);
+            let profiles = load_profiles(&[name.to_string()], None).unwrap();
             assert_eq!(
                 profiles.len(),
                 1,

@@ -189,7 +189,7 @@ fn build_sandbox_context(args: &Args) -> Result<SandboxContext> {
     let profile_names = collect_profile_names(args, &config, &working_dir);
 
     // Load and compose profiles
-    let profiles = load_profiles(&profile_names, None);
+    let profiles = load_profiles(&profile_names, None)?;
     let composed = compose_profiles(&profiles);
 
     // Build sandbox params with all overrides applied
