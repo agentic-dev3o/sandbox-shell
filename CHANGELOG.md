@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-04-06
+
+### Bug Fixes
+
+- **security:** Harden sandbox with env filtering, mach/signal/dev restrictions (#31)
+
+
+### CI
+
+- Bump the github-actions group across 1 directory with 3 updates (#33)
+
+
+### Dependencies
+
+- Bump the rust-dependencies group across 1 directory with 6 updates (#34)
+
 ## [1.0.1] - 2026-02-26
 
 ### Bug Fixes
