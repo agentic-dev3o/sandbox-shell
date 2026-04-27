@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-04-27
+
+### Bug Fixes
+
+- **executor:** Restore tty foreground pgrp for interactive sessions (#42)
+
+
+### CI
+
+- Bump the github-actions group with 2 updates (#36)
+
+
+### Dependencies
+
+- Bump the rust-dependencies group across 1 directory with 4 updates (#40)
+
+
+### Features
+
+- **executor:** Forward signals to sandboxed process group to prevent orphans (#39)
+
+
+### Miscellaneous
+
+- **ci:** Ignore false positive gitleaks finding in QA workflow cache key (#41)
+
 ## [1.0.2] - 2026-04-06
 
 ### Bug Fixes
