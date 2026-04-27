@@ -1,11 +1,21 @@
 // sandbox-exec invocation
 use crate::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams, SeatbeltError};
 use crate::sandbox::trace::TraceSession;
+use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+use signal_hook::iterator::Signals;
 use std::fs;
 use std::io;
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
+use std::time::Duration;
 use tempfile::{NamedTempFile, TempDir};
+
+/// Grace period between SIGTERM and SIGKILL when forwarding shutdown signals
+/// to the sandboxed process group. Long enough for typical cleanup (closing
+/// IPC peers, flushing buffers) but short enough that orphaned processes do
+/// not linger after `sx` is signalled.
+const SIGTERM_TO_SIGKILL_GRACE: Duration = Duration::from_secs(2);
 
 /// Exit codes for sandbox execution
 pub mod exit_codes {
@@ -171,8 +181,11 @@ SAVEHIST=0
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    // Execute and wait
-    let status = cmd.spawn()?.wait()?;
+    // Execute and wait, forwarding shutdown signals to the entire sandboxed subtree.
+    // Without this, sx exits without signalling its sandboxed descendants — IPC
+    // children (e.g. Node `--useNodeIpc` workers) get reparented to launchd and
+    // accumulate forever.
+    let status = spawn_with_signal_forwarding(cmd)?;
 
     // Stop trace session
     if let Some(ref mut session) = trace_session {
@@ -215,6 +228,74 @@ pub fn execute_sandboxed_captured(
 /// Print the generated seatbelt profile (dry-run mode)
 pub fn dry_run(params: &SandboxParams) -> Result<String, SeatbeltError> {
     generate_seatbelt_profile(params)
+}
+
+/// RAII guard that SIGKILLs an entire process group on drop.
+/// Provides panic / early-return safety so the sandbox subtree is never
+/// orphaned if `sx` exits along an unexpected path.
+struct PgidKillGuard {
+    pgid: Option<i32>,
+}
+
+impl PgidKillGuard {
+    fn new(pgid: i32) -> Self {
+        Self { pgid: Some(pgid) }
+    }
+
+    /// Disarm the guard after a clean exit so we do not signal a dead pgid.
+    fn disarm(&mut self) {
+        self.pgid = None;
+    }
+}
+
+impl Drop for PgidKillGuard {
+    fn drop(&mut self) {
+        if let Some(pgid) = self.pgid {
+            // Best-effort: ignore errors (group may already be gone).
+            unsafe {
+                libc::kill(-pgid, libc::SIGKILL);
+            }
+        }
+    }
+}
+
+/// Send `sig` to the entire process group identified by `pgid`.
+fn signal_pgroup(pgid: i32, sig: libc::c_int) {
+    unsafe {
+        libc::kill(-pgid, sig);
+    }
+}
+
+/// Spawn `cmd` in its own process group and wait for it, forwarding
+/// SIGINT/SIGTERM/SIGHUP to the sandboxed subtree with a SIGTERM →
+/// grace-period → SIGKILL escalation.
+fn spawn_with_signal_forwarding(mut cmd: Command) -> io::Result<ExitStatus> {
+    // Put the child in its own process group so kill(-pgid, ...) reaches every
+    // descendant in one syscall and does not loop back to sx itself.
+    cmd.process_group(0);
+
+    let mut child = cmd.spawn()?;
+    let pgid = child.id() as i32;
+    let mut kill_guard = PgidKillGuard::new(pgid);
+
+    let mut signals = Signals::new([SIGINT, SIGTERM, SIGHUP])?;
+    let signal_handle = signals.handle();
+
+    let signal_thread = std::thread::spawn(move || {
+        if signals.forever().next().is_some() {
+            signal_pgroup(pgid, libc::SIGTERM);
+            std::thread::sleep(SIGTERM_TO_SIGKILL_GRACE);
+            signal_pgroup(pgid, libc::SIGKILL);
+        }
+    });
+
+    let status = child.wait()?;
+
+    kill_guard.disarm();
+    signal_handle.close();
+    let _ = signal_thread.join();
+
+    Ok(status)
 }
 
 /// Check if an environment variable name matches any glob-like pattern.
@@ -362,5 +443,42 @@ mod tests {
             "DYLD_INSERT_LIBRARIES",
             &["DYLD_*".to_string()]
         ));
+    }
+
+    /// Verifies the foundational mechanism for issue #37: spawning a child via
+    /// `Command::process_group(0)` isolates it into its own process group so we
+    /// can deliver group-wide signals via `kill(-pgid, ...)`. This is a direct
+    /// unit test of the kernel behavior `spawn_with_signal_forwarding` relies
+    /// on; it does not require `sandbox-exec` and runs in any environment.
+    #[test]
+    fn test_process_group_isolation_for_signal_forwarding() {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.args(["-c", "sleep 5"])
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        let mut child = cmd.spawn().expect("spawn /bin/sh");
+        let child_pid = child.id() as i32;
+
+        let child_pgid = unsafe { libc::getpgid(child_pid) };
+        assert_eq!(
+            child_pgid, child_pid,
+            "child should lead its own process group (pgid == pid)"
+        );
+
+        let test_pgid = unsafe { libc::getpgid(0) };
+        assert_ne!(
+            test_pgid, child_pgid,
+            "child pgid must be isolated from test process pgid"
+        );
+
+        // Cleanup: signal the entire group, mirroring what the production
+        // signal handler does, then reap the child.
+        unsafe {
+            libc::kill(-child_pid, libc::SIGTERM);
+        }
+        let _ = child.wait();
     }
 }
