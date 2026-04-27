@@ -266,6 +266,53 @@ fn signal_pgroup(pgid: i32, sig: libc::c_int) {
     }
 }
 
+/// RAII guard that restores the terminal's foreground process group on drop.
+/// Required for interactive sessions: when the child runs in its own pgrp,
+/// it must own the tty foreground or any tty read raises SIGTTIN and the
+/// shell hangs. The parent must reclaim the foreground on exit so the
+/// user's shell does not end up stopped.
+struct TtyForegroundGuard {
+    tty_fd: libc::c_int,
+    original_pgrp: libc::pid_t,
+}
+
+impl TtyForegroundGuard {
+    /// If stdin is a tty, hand its foreground pgrp to `child_pgid` and
+    /// return a guard that restores the previous foreground on drop.
+    fn install(child_pgid: i32) -> Option<Self> {
+        let tty_fd = libc::STDIN_FILENO;
+        if unsafe { libc::isatty(tty_fd) } != 1 {
+            return None;
+        }
+        let original_pgrp = unsafe { libc::tcgetpgrp(tty_fd) };
+        if original_pgrp < 0 {
+            return None;
+        }
+        // tcsetpgrp from a non-foreground pgrp would normally raise SIGTTOU
+        // on the caller; ignore it briefly so the handoff succeeds.
+        let prev = unsafe { libc::signal(libc::SIGTTOU, libc::SIG_IGN) };
+        let rc = unsafe { libc::tcsetpgrp(tty_fd, child_pgid) };
+        unsafe { libc::signal(libc::SIGTTOU, prev) };
+        if rc != 0 {
+            return None;
+        }
+        Some(Self {
+            tty_fd,
+            original_pgrp,
+        })
+    }
+}
+
+impl Drop for TtyForegroundGuard {
+    fn drop(&mut self) {
+        let prev = unsafe { libc::signal(libc::SIGTTOU, libc::SIG_IGN) };
+        unsafe {
+            libc::tcsetpgrp(self.tty_fd, self.original_pgrp);
+            libc::signal(libc::SIGTTOU, prev);
+        }
+    }
+}
+
 /// Spawn `cmd` in its own process group and wait for it, forwarding
 /// SIGINT/SIGTERM/SIGHUP to the sandboxed subtree with a SIGTERM →
 /// grace-period → SIGKILL escalation.
@@ -277,6 +324,7 @@ fn spawn_with_signal_forwarding(mut cmd: Command) -> io::Result<ExitStatus> {
     let mut child = cmd.spawn()?;
     let pgid = child.id() as i32;
     let mut kill_guard = PgidKillGuard::new(pgid);
+    let _tty_guard = TtyForegroundGuard::install(pgid);
 
     let mut signals = Signals::new([SIGINT, SIGTERM, SIGHUP])?;
     let signal_handle = signals.handle();
