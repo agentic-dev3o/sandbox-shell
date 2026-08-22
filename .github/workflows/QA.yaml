@@ -10,17 +10,33 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # sx has two sandbox backends (Seatbelt on macOS, Landlock on Linux), so both
+  # platforms are first-class in CI.
   test:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Report sandbox capabilities
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            cat /sys/kernel/security/lsm 2>/dev/null || echo "securityfs not mounted"
+            echo "max_user_namespaces=$(cat /proc/sys/user/max_user_namespaces 2>/dev/null)"
+          fi
       - name: Run tests
         run: cargo test --verbose
 
   lint:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -30,10 +46,15 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        # --all-targets so tests and benches are linted too, not just the crate.
+        run: cargo clippy --all-targets -- -D warnings
 
   build:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -42,6 +63,22 @@ jobs:
         run: cargo build --verbose
       - name: Build release
         run: cargo build --release --verbose
+
+  # End-to-end check that the sandbox actually denies what it claims.
+  security-behaviour:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run security verification
+        env:
+          SX_SKIP_TEST_SUITE: "1" # covered by the `test` job
+        run: bash scripts/test-security.sh
 
   # SCA: Dependency vulnerability scanning
   security-audit:

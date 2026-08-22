@@ -22,10 +22,11 @@ allow_write = [
     "~/.bun",
 ]
 
-# Allow listing parent directories for Bun's module resolution
-# Uses Seatbelt 'literal' filter - only the exact directory is listable
+# Allow listing parent directories for Bun's module resolution.
+# macOS uses the Seatbelt 'literal' filter, so only the exact directory is
+# listable. Landlock rules are hierarchical, so on Linux nested directories are
+# listable too - names only, never file contents.
 allow_list_dirs = [
-    "/Users",
     "~",
 ]
 
@@ -35,3 +36,9 @@ pass_env = [
     "NODE_ENV",
     "npm_config_registry",
 ]
+
+[platform.macos.filesystem]
+allow_list_dirs = ["/Users"]
+
+[platform.linux.filesystem]
+allow_list_dirs = ["/home"]

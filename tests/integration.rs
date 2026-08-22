@@ -21,8 +21,12 @@ use sx::sandbox::executor::execute_sandboxed_captured;
 use sx::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams};
 use tempfile::TempDir;
 
-/// Check if sandbox-exec with custom deny-default profiles is available
-/// On newer macOS versions, custom sandbox profiles with deny-default may be restricted
+/// Check if sandbox-exec with custom deny-default profiles is available.
+///
+/// On newer macOS versions, custom sandbox profiles with deny-default may be
+/// restricted. On Linux this is always false: the Landlock backend launches
+/// through the `sx` binary itself, so its end-to-end coverage lives in
+/// `tests/linux_sandbox.rs`, which drives the real binary.
 fn is_custom_sandbox_available() -> bool {
     // Test with a deny-default profile that should allow basic execution
     let profile = r#"(version 1)
@@ -59,7 +63,13 @@ fn is_custom_sandbox_available() -> bool {
 macro_rules! skip_if_no_sandbox {
     () => {
         if !is_custom_sandbox_available() {
-            eprintln!("Skipping test: custom sandbox profiles not available on this system");
+            if cfg!(target_os = "linux") {
+                eprintln!(
+                    "Skipping test: Linux sandbox behaviour is covered by tests/linux_sandbox.rs"
+                );
+            } else {
+                eprintln!("Skipping test: custom sandbox profiles not available on this system");
+            }
             return;
         }
     };

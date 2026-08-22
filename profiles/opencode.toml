@@ -9,7 +9,6 @@ allow_read = [
     "~/.local/state/opencode",
     "~/.config/opencode",
     "~/.cache/opencode",
-    "/private/tmp/.*",
 ]
 
 allow_write = [
@@ -18,14 +17,15 @@ allow_write = [
     "~/.local/share/opencode",
     "~/.local/state/opencode",
     "~/.cache/opencode",
-    "/private/tmp/.*",
-]
-
-# Directory listing permissions
-allow_list_dirs = [
-    "/private/tmp"
 ]
 
 [shell]
 # No additional environment variables needed
 pass_env = []
+
+# macOS keeps per-session temp dirs outside /tmp; on Linux the base profile
+# already covers /tmp.
+[platform.macos.filesystem]
+allow_read = ["/private/tmp/.*"]
+allow_write = ["/private/tmp/.*"]
+allow_list_dirs = ["/private/tmp"]

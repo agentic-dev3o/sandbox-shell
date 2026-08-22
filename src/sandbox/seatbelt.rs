@@ -4,7 +4,6 @@
 //! Uses a deny-by-default security model where only explicitly allowed paths are accessible.
 
 use crate::config::schema::{ExecSugid, NetworkMode};
-use std::path::PathBuf;
 
 /// Error type for seatbelt profile generation
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,36 +82,8 @@ fn glob_to_regex(pattern: &str) -> String {
     regex
 }
 
-/// Parameters for generating a Seatbelt sandbox profile
-#[derive(Debug, Clone, Default)]
-pub struct SandboxParams {
-    /// Working directory (project root) - gets full read/write access
-    pub working_dir: PathBuf,
-    /// Home directory
-    pub home_dir: PathBuf,
-    /// Network mode (offline, online, localhost)
-    pub network_mode: NetworkMode,
-    /// Paths to allow reading (deny-by-default, only these paths are readable)
-    pub allow_read: Vec<PathBuf>,
-    /// Paths to explicitly deny reading (overrides allow_read, for sensitive subpaths)
-    pub deny_read: Vec<PathBuf>,
-    /// Paths to allow writing (restricted by default)
-    pub allow_write: Vec<PathBuf>,
-    /// Paths to allow directory listing only (readdir), not file contents.
-    /// Uses Seatbelt `literal` filter - allows listing a directory's entries
-    /// without granting access to files or subdirectories within it.
-    pub allow_list_dirs: Vec<PathBuf>,
-    /// Raw seatbelt rules to include verbatim
-    pub raw_rules: Option<String>,
-    /// Allow execution of setuid/setgid binaries
-    pub allow_exec_sugid: ExecSugid,
-    /// Environment variables to pass through (glob patterns supported)
-    pub pass_env: Vec<String>,
-    /// Environment variables to deny (glob patterns, takes precedence over pass_env)
-    pub deny_env: Vec<String>,
-    /// Environment variables to explicitly set
-    pub set_env: std::collections::HashMap<String, String>,
-}
+// `SandboxParams` lives in `sandbox::params` so platform backends can share it.
+pub use crate::sandbox::params::SandboxParams;
 
 /// Generate a Seatbelt profile from the given parameters
 ///
@@ -309,6 +280,7 @@ pub fn generate_seatbelt_profile(params: &SandboxParams) -> Result<String, Seatb
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn test_default_params_produces_valid_profile() {

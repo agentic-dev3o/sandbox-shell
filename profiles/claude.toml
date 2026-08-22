@@ -11,9 +11,6 @@ allow_read = [
     "~/.local/state/claude", # XDG state dir for locks
     "~/.cache/claude",       # XDG cache dir for staging
     "~/.local/bin/claude",
-    "~/.CFUserTextEncoding",
-    "/private/tmp/claude*", # claude-UID directories (e.g. claude-501)
-    "/private/tmp/zsh*", # When claude use zsh in bash it create dynamic tmp file
 ]
 allow_write = [
     "~/.claude",
@@ -22,11 +19,23 @@ allow_write = [
     "~/.local/share/claude",
     "~/.local/state/claude", # XDG state dir for locks
     "~/.cache/claude",       # XDG cache dir for staging
-    "~/Library/Caches/claude-cli-nodejs/",
-    "~/Library/Keychains/login.keychain-db", # OAuth token refresh
-    "/private/tmp/claude*", # claude-UID directories (e.g. claude-501)
-    "/private/tmp/zsh*", # When claude use zsh in bash it create dynamic tmp file
 ]
 
 [shell]
 pass_env = ["ANTHROPIC_API_KEY"]
+
+# macOS-only paths: per-session temp dirs live outside /tmp, and the login
+# keychain backs OAuth token refresh. On Linux the base profile already grants
+# /tmp and there is no keychain equivalent.
+[platform.macos.filesystem]
+allow_read = [
+    "~/.CFUserTextEncoding",
+    "/private/tmp/claude*", # claude-UID directories (e.g. claude-501)
+    "/private/tmp/zsh*",    # claude creates dynamic tmp files when running zsh
+]
+allow_write = [
+    "~/Library/Caches/claude-cli-nodejs/",
+    "~/Library/Keychains/login.keychain-db", # OAuth token refresh
+    "/private/tmp/claude*",
+    "/private/tmp/zsh*",
+]

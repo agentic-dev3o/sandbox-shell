@@ -4,10 +4,11 @@ use std::path::PathBuf;
 // Re-export NetworkMode from config schema to avoid duplication
 pub use crate::config::schema::NetworkMode;
 
-/// sx - Lightweight sandbox for macOS development
+/// sx - Lightweight sandbox for macOS and Linux development
 ///
-/// Wraps shell sessions and commands in a macOS Seatbelt sandbox,
-/// restricting filesystem and network access to protect the user's system.
+/// Wraps shell sessions and commands in a macOS Seatbelt or Linux Landlock
+/// sandbox, restricting filesystem and network access to protect the user's
+/// system.
 #[derive(Parser, Debug)]
 #[command(name = "sx")]
 #[command(author, version, about, long_about = None)]
@@ -29,13 +30,14 @@ pub struct Args {
     pub debug: bool,
 
     /// Trace sandbox violations (shows blocked operations in real-time).
-    /// Note: Shows violations from ALL sandboxed processes on the system,
-    /// not just this session (macOS limitation)
+    /// macOS only: shows violations from ALL sandboxed processes on the
+    /// system, not just this session. Unavailable on Linux, where Landlock
+    /// denials are only recorded in the privileged kernel audit log.
     #[arg(short, long)]
     pub trace: bool,
 
-    /// Write trace output to file instead of stderr.
-    /// Note: Shows violations from ALL sandboxed processes on the system
+    /// Write trace output to file instead of stderr (macOS only).
+    /// Shows violations from ALL sandboxed processes on the system
     #[arg(long, value_name = "PATH")]
     pub trace_file: Option<PathBuf>,
 

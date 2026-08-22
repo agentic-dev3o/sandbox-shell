@@ -148,7 +148,7 @@ fn test_compose_profiles_empty() {
 #[test]
 fn test_compose_profiles_single() {
     let profile = BuiltinProfile::Base.load().unwrap();
-    let composed = compose_profiles(&[profile.clone()]);
+    let composed = compose_profiles(std::slice::from_ref(&profile));
     assert_eq!(
         composed.filesystem.allow_read,
         profile.filesystem.allow_read
@@ -241,10 +241,15 @@ fn test_builtin_profile_opencode() {
         .filesystem
         .allow_read
         .contains(&"~/.cache/opencode".to_string()));
+    // The macOS per-session temp dir is declared under [platform.macos] and is
+    // folded in only when building for macOS.
+    #[cfg(target_os = "macos")]
     assert!(profile
         .filesystem
         .allow_list_dirs
         .contains(&"/private/tmp".to_string()));
+    #[cfg(not(target_os = "macos"))]
+    assert!(profile.filesystem.allow_list_dirs.is_empty());
     assert!(profile
         .filesystem
         .allow_write

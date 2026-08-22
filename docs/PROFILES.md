@@ -7,10 +7,14 @@ Profiles are composable sandbox configs. Stack them: `sx online rust -- cargo bu
 ### base
 
 Always included (unless `inherit_base = false`). Provides:
-- Read access to system directories (`/usr`, `/bin`, `/sbin`, `/Library`, `/System`)
+- Read access to system directories (`/usr`, `/bin`, `/sbin`, `/opt`, `/etc`)
 - Read access to shell configs (`~/.zshrc`, `~/.bashrc`…)
-- Write access to `/tmp` and session temp dir
+- Write access to `/tmp`
 - Basic env vars (`TERM`, `PATH`, `HOME`, `USER`, `SHELL`)
+
+Plus per-OS additions:
+- **macOS:** `/Library`, `/System`, `/private/*`, safe `~/Library` subdirectories, the session temp dir
+- **Linux:** `/lib`, `/lib64`, `/proc`, `/sys`, `/var/tmp`, `/dev/shm`, `~/.cache`, and git's XDG config
 
 **Always denied** (even if you allow `~`):
 - `~/.ssh`
@@ -116,6 +120,30 @@ Use it:
 sx mycompany -- ./run.sh
 ```
 
+### Per-OS Sections
+
+A profile can carry additions that only apply on one platform. Everything
+outside `[platform.*]` applies everywhere; the matching overlay is merged in
+when the profile loads, so nothing downstream has to think about platforms.
+
+```toml
+# ~/.config/sx/profiles/mytool.toml
+[filesystem]
+allow_read = ["~/.mytool"]        # both platforms
+
+[platform.macos.filesystem]
+allow_read = ["~/Library/Caches/mytool"]
+
+[platform.linux.filesystem]
+allow_read = ["~/.cache/mytool"]
+```
+
+`network_mode`, `filesystem` and `shell` can all be overridden per platform.
+Lists are merged (union); `network_mode` replaces the shared value.
+
+Check the result with `sx --dry-run mytool` — it prints the policy for the
+platform you are on.
+
 ### Raw Seatbelt Rules
 
 For advanced use cases (IOKit, Mach services, app bundles), custom profiles support raw seatbelt rules:
@@ -140,6 +168,9 @@ allow_write = ["~/Library/Caches/ms-playwright/"]
 ```
 
 Raw rules are appended verbatim to the generated seatbelt profile. Use `sx --dry-run myprofile` to verify the output.
+
+Raw seatbelt rules are macOS-only and are ignored on Linux; `sx --dry-run` notes
+this when a profile carries them.
 
 ### Profile Resolution Order
 
@@ -166,3 +197,4 @@ profiles = ["rust", "localhost"]
 3. **Env vars:** union of pass/deny lists
 4. **Exec sugid:** path lists are unioned; mixing paths and booleans → last wins
 5. **Seatbelt raw rules:** concatenated from all profiles in order
+6. **Per-OS sections:** merged into the profile's shared fields before any of the above

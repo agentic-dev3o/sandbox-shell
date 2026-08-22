@@ -14,8 +14,9 @@ use crate::config::{
     ExecSugid, NetworkMode, Profile,
 };
 use crate::detection::project_type::detect_project_types;
+use crate::sandbox::backend;
 use crate::sandbox::executor::execute_sandboxed_with_trace;
-use crate::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams};
+use crate::sandbox::params::SandboxParams;
 use crate::utils::paths::expand_paths;
 
 /// Initialize a .sandbox.toml config in the current directory
@@ -40,6 +41,12 @@ pub fn explain(args: &Args) -> Result<()> {
     let context = build_sandbox_context(args)?;
 
     println!("=== Sandbox Configuration ===\n");
+
+    println!("Backend: {}", backend::describe());
+    for caveat in backend::caveats(&context.params) {
+        println!("  {}", caveat);
+    }
+    println!();
 
     // Network mode
     println!("Network Mode: {:?}", context.params.network_mode);
@@ -73,9 +80,17 @@ pub fn explain(args: &Args) -> Result<()> {
 
     // Denied read paths
     if !context.params.deny_read.is_empty() {
+        let shadowed = denies_shadowed_by_working_dir(&context.params);
         println!("Denied Read Paths:");
         for path in &context.params.deny_read {
-            println!("  - {}", path.display());
+            if shadowed.contains(&path) {
+                println!(
+                    "  - {}  (OVERRIDDEN by the working directory)",
+                    path.display()
+                );
+            } else {
+                println!("  - {}", path.display());
+            }
         }
         println!();
     }
@@ -119,7 +134,7 @@ pub fn explain(args: &Args) -> Result<()> {
             .shell
             .clone()
             .or_else(|| env::var("SHELL").ok())
-            .unwrap_or_else(|| "/bin/zsh".to_string());
+            .unwrap_or_else(|| crate::shell::default_shell().to_string());
         println!("Mode: Interactive shell ({})", shell);
     }
 
@@ -129,8 +144,8 @@ pub fn explain(args: &Args) -> Result<()> {
 /// Print generated sandbox profile without executing
 pub fn dry_run(args: &Args) -> Result<()> {
     let context = build_sandbox_context(args)?;
-    let profile = generate_seatbelt_profile(&context.params)
-        .context("Failed to generate seatbelt profile")?;
+    let profile =
+        backend::render_policy(&context.params).context("Failed to generate sandbox policy")?;
 
     if args.verbose {
         println!("# Profiles: {}", context.profile_names.join(", "));
@@ -148,10 +163,16 @@ pub fn execute(args: &Args) -> Result<()> {
     let context = build_sandbox_context(args)?;
 
     if args.verbose {
+        eprintln!("[sx] Backend: {}", backend::describe());
+        for caveat in backend::caveats(&context.params) {
+            eprintln!("[sx]   {}", caveat);
+        }
         eprintln!("[sx] Network: {:?}", context.params.network_mode);
         eprintln!("[sx] Profiles: {}", context.profile_names.join(", "));
         eprintln!("[sx] Working dir: {}", context.params.working_dir.display());
     }
+
+    warn_about_shadowed_denies(&context.params);
 
     let command: Vec<String> = args.command.clone().unwrap_or_default();
     let shell = context.config.sandbox.shell.as_deref();
@@ -304,7 +325,7 @@ fn build_sandbox_params(
             .shell
             .clone()
             .or_else(|| std::env::var("SHELL").ok())
-            .unwrap_or_else(|| "/bin/zsh".to_string());
+            .unwrap_or_else(|| crate::shell::default_shell().to_string());
         let path_env = std::env::var("PATH").ok();
         let shell_list_dirs =
             collect_interactive_shell_list_dirs(&home_dir, &shell_path, path_env.as_deref());
@@ -325,22 +346,10 @@ fn build_sandbox_params(
     }
 
     // Expand all paths
-    allow_read = expand_paths(&allow_read)
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
-    deny_read = expand_paths(&deny_read)
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
-    allow_write = expand_paths(&allow_write)
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
-    allow_list_dirs = expand_paths(&allow_list_dirs)
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
+    allow_read = expand_unique(&allow_read);
+    deny_read = expand_unique(&deny_read);
+    allow_write = expand_unique(&allow_write);
+    allow_list_dirs = expand_unique(&allow_list_dirs);
 
     // Build raw rules if present
     let raw_rules = profile.seatbelt.as_ref().and_then(|s| s.raw.clone());
@@ -368,6 +377,53 @@ fn build_sandbox_params(
         deny_env,
         set_env,
     }
+}
+
+/// Denied paths that the working directory silently overrides.
+///
+/// The working directory is granted full access *after* the deny rules on both
+/// backends, so a deny that lives inside it has no effect. That is intentional
+/// (a project under `~/Documents` still has to build), but it also means
+/// running `sx` straight from `$HOME` quietly voids every deny. Worth saying
+/// out loud rather than letting the promise fail silently.
+fn denies_shadowed_by_working_dir(params: &SandboxParams) -> Vec<&PathBuf> {
+    if params.working_dir.as_os_str().is_empty() {
+        return Vec::new();
+    }
+    params
+        .deny_read
+        .iter()
+        .filter(|deny| deny.starts_with(&params.working_dir))
+        .collect()
+}
+
+fn warn_about_shadowed_denies(params: &SandboxParams) {
+    let shadowed = denies_shadowed_by_working_dir(params);
+    if shadowed.is_empty() {
+        return;
+    }
+    let list: Vec<String> = shadowed.iter().map(|p| p.display().to_string()).collect();
+    eprintln!(
+        "\x1b[33m[sx:warn]\x1b[0m Working directory {} has full access, which overrides \
+         deny_read for: {}",
+        params.working_dir.display(),
+        list.join(", ")
+    );
+}
+
+/// Expand paths and drop duplicates, preserving order.
+///
+/// Distinct entries can collapse onto the same path once symlinks are resolved:
+/// on usr-merged Linux systems `/bin`, `/sbin` and `/lib` all land in `/usr`.
+/// Duplicate rules are harmless to both backends but make `--explain` and
+/// `--dry-run` noisy.
+fn expand_unique(paths: &[String]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    expand_paths(paths)
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .filter(|p| seen.insert(p.clone()))
+        .collect()
 }
 
 /// Determine network mode with precedence: CLI > profile > config
@@ -519,6 +575,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn deny_inside_the_working_directory_is_reported_as_shadowed() {
+        let params = SandboxParams {
+            working_dir: PathBuf::from("/home/u"),
+            deny_read: vec![
+                PathBuf::from("/home/u/.aws"),
+                PathBuf::from("/home/other/.aws"),
+            ],
+            ..Default::default()
+        };
+        let shadowed = denies_shadowed_by_working_dir(&params);
+        assert_eq!(shadowed, vec![&PathBuf::from("/home/u/.aws")]);
+    }
+
+    #[test]
+    fn denies_outside_the_working_directory_are_not_shadowed() {
+        let params = SandboxParams {
+            working_dir: PathBuf::from("/home/u/project"),
+            deny_read: vec![PathBuf::from("/home/u/.aws")],
+            ..Default::default()
+        };
+        assert!(denies_shadowed_by_working_dir(&params).is_empty());
+    }
+
+    #[test]
+    fn an_empty_working_directory_shadows_nothing() {
+        let params = SandboxParams {
+            deny_read: vec![PathBuf::from("/home/u/.aws")],
+            ..Default::default()
+        };
+        assert!(denies_shadowed_by_working_dir(&params).is_empty());
+    }
+
+    #[test]
     fn test_generate_config_template_is_valid_toml() {
         let template = generate_config_template();
         let result: Result<Config, _> = toml::from_str(template);
@@ -570,8 +659,10 @@ mod tests {
     #[test]
     fn test_determine_network_mode_profile_precedence() {
         let args = Args::try_parse_from(["sx"]).unwrap();
-        let mut profile = Profile::default();
-        profile.network_mode = Some(NetworkMode::Localhost);
+        let profile = Profile {
+            network_mode: Some(NetworkMode::Localhost),
+            ..Default::default()
+        };
         let config = Config::default();
 
         let mode = determine_network_mode(&args, &profile, &config);

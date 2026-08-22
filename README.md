@@ -1,18 +1,22 @@
-# sx - macOS Sandbox CLI for Secure Development
+# sx - Sandbox CLI for Secure Development
 
 [![QA](https://github.com/agentic-dev3o/sandbox-shell/actions/workflows/QA.yaml/badge.svg)](https://github.com/agentic-dev3o/sandbox-shell/actions/workflows/QA.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://developer.apple.com/documentation/security/app_sandbox)
+[![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#platform-support)
 
-A lightweight Rust CLI that wraps shell commands in macOS Seatbelt sandboxes. That npm package you just installed? It can't read your `~/.ssh` keys or `~/.aws` credentials. Can't steal what you can't see.
+A lightweight Rust CLI that wraps shell commands in a kernel sandbox — Seatbelt on macOS, Landlock on Linux. That npm package you just installed? It can't read your `~/.ssh` keys or `~/.aws` credentials. Can't steal what you can't see.
 
-Supply chain attacks are everywhere. A single compromised dependency tries to exfiltrate your secrets? It can't—filesystem is deny-by-default. Your credentials aren't readable, even with network enabled. No containers, no VMs, just native macOS sandboxing.
+Supply chain attacks are everywhere. A single compromised dependency tries to exfiltrate your secrets? It can't—filesystem is deny-by-default. Your credentials aren't readable, even with network enabled. No containers, no VMs, just the sandboxing your kernel already ships.
 
 ## Quick Start
 
 ```bash
+# macOS
 brew tap agentic-dev3o/sx
 brew install sx
+
+# Linux - download a release binary, or build from source
+cargo install --git https://github.com/agentic-dev3o/sandbox-shell
 
 # That's it. Now run untrusted code:
 sx -- npm run build
@@ -86,7 +90,24 @@ cd sandbox-shell
 cargo install --path .
 ```
 
-Requires macOS and Rust 1.70+.
+Requires Rust 1.70+, plus one of:
+
+- **macOS** 10.15+ (Seatbelt)
+- **Linux** 5.13+ with Landlock enabled (`landlock` must appear in `/sys/kernel/security/lsm`). Kernel 6.12+ is recommended for the full rule set.
+
+## Platform Support
+
+`sx` uses the sandbox your kernel provides. The CLI, profiles, and config format are identical on both.
+
+| | macOS | Linux |
+|---|---|---|
+| Filesystem | Seatbelt (`sandbox-exec`) | Landlock LSM |
+| Network `offline` | Seatbelt network rules | network namespace, or seccomp where user namespaces are blocked |
+| Network `localhost` | host loopback | the sandbox's own private loopback |
+| `--trace` | unified log stream | unavailable (denials are only in the privileged audit log) |
+| `allow_exec_sugid` | per-binary opt-in | not applicable — setuid never elevates |
+
+Run `sx --explain` to see what the current machine will actually enforce. Behavioural differences are documented in [docs/SECURITY.md](docs/SECURITY.md#platform-differences).
 
 ## Configuration
 
@@ -139,7 +160,7 @@ allow_write = ["/tmp/build"]
 pass_env = ["NODE_ENV", "DEBUG"]
 ```
 
-Custom profiles go in `~/.config/sx/profiles/name.toml`. They support filesystem paths, env vars, exec sugid, and raw seatbelt rules for advanced sandbox operations. See [docs/PROFILES.md](docs/PROFILES.md).
+Custom profiles go in `~/.config/sx/profiles/name.toml`. They support filesystem paths, env vars, exec sugid, per-OS sections, and raw seatbelt rules for advanced macOS operations. See [docs/PROFILES.md](docs/PROFILES.md).
 
 ## Usage
 
@@ -162,7 +183,7 @@ sx bun online -- bun install
 # Debug what's blocked
 sx --trace -- cargo build       # Real-time violation log
 sx --explain rust               # Show allowed/denied
-sx --dry-run rust               # Preview seatbelt profile
+sx --dry-run rust               # Preview the generated policy
 ```
 
 ### Options
@@ -171,9 +192,9 @@ sx --dry-run rust               # Preview seatbelt profile
 |--------|-------------|
 | `-v, --verbose` | Show sandbox configuration |
 | `-d, --debug` | Log all denials |
-| `-t, --trace` | Real-time violation stream |
-| `--trace-file <PATH>` | Write trace to file |
-| `-n, --dry-run` | Print profile, don't execute |
+| `-t, --trace` | Real-time violation stream (macOS only) |
+| `--trace-file <PATH>` | Write trace to file (macOS only) |
+| `-n, --dry-run` | Print the policy, don't execute |
 | `-c, --config <PATH>` | Use specific config |
 | `--no-config` | Ignore all configs |
 | `--explain` | Show what's allowed/denied |

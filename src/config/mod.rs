@@ -8,8 +8,8 @@ pub use global::load_global_config;
 pub use merge::merge_configs;
 pub(crate) use profile::merge_unique;
 pub use profile::{
-    compose_profiles, load_profile, load_profiles, BuiltinProfile, Profile, ProfileError,
-    ProfileFilesystem, ProfileShell,
+    compose_profiles, load_profile, load_profiles, BuiltinProfile, PlatformProfile,
+    PlatformProfiles, Profile, ProfileError, ProfileFilesystem, ProfileShell,
 };
 pub use project::load_project_config;
 pub use schema::{Config, ExecSugid, NetworkMode};

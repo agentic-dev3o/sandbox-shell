@@ -1,8 +1,13 @@
 //! Integration tests for signal forwarding (issue #37).
 //!
 //! Verifies that `sx` forwards SIGINT/SIGTERM/SIGHUP to the entire sandboxed
-//! process subtree so descendants are not orphaned to launchd when `sx` exits.
+//! process subtree so descendants are not orphaned when `sx` exits.
+//!
+//! Process supervision is shared between the Seatbelt and Landlock backends, so
+//! these run on both platforms - on Linux they additionally prove that signals
+//! reach through the `--sandbox-apply` helper.
 
+#[cfg(target_os = "macos")]
 use std::fs;
 use std::process::{Command, Stdio};
 use std::thread;
@@ -11,9 +16,20 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// Path to the `sx` binary produced by Cargo for this test target.
 const SX_BIN: &str = env!("CARGO_BIN_EXE_sx");
 
-/// Probe whether `sandbox-exec` accepts a custom deny-default profile on this
-/// system. On hardened macOS configurations custom profiles can be blocked,
-/// in which case there is nothing meaningful to assert about signal forwarding.
+/// Probe whether this system can actually run a sandboxed command. On hardened
+/// macOS configurations custom Seatbelt profiles can be blocked, and a kernel
+/// without Landlock cannot enforce anything - in either case there is nothing
+/// meaningful to assert about signal forwarding.
+#[cfg(not(target_os = "macos"))]
+fn is_custom_sandbox_available() -> bool {
+    Command::new(SX_BIN)
+        .args(["--no-config", "--", "/bin/echo", "ok"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
 fn is_custom_sandbox_available() -> bool {
     let probe = r#"(version 1)
 (deny default)
@@ -120,7 +136,7 @@ fn test_sigterm_to_sx_propagates_to_sandbox_subtree() {
         .expect("spawn sx");
     let sx_pid = child.id();
 
-    // Give sandbox-exec → sh → sleep chain time to come up.
+    // Give the launcher → sh → sleep chain time to come up.
     thread::sleep(Duration::from_millis(800));
     let before = count_processes(&pattern);
     assert!(
@@ -188,7 +204,7 @@ fn test_sigkill_to_sx_orphans_subtree_known_limitation() {
     }
     let _ = child.wait();
 
-    // Brief settle; orphan is reparented to launchd but stays alive.
+    // Brief settle; the orphan is reparented to init but stays alive.
     thread::sleep(Duration::from_millis(500));
     let after_kill = count_processes(&pattern);
 

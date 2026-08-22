@@ -71,6 +71,73 @@ pub struct Profile {
     /// Allow execution of setuid/setgid binaries
     #[serde(default)]
     pub allow_exec_sugid: Option<ExecSugid>,
+    /// Per-OS additions, folded into the fields above when the profile loads.
+    ///
+    /// Lets one profile serve both platforms: `~/.cargo` is shared, while
+    /// `/System` and `/proc` live under `[platform.macos]` and
+    /// `[platform.linux]` respectively.
+    #[serde(default)]
+    pub platform: PlatformProfiles,
+}
+
+/// Per-OS overlays declared in a profile.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PlatformProfiles {
+    pub macos: Option<PlatformProfile>,
+    pub linux: Option<PlatformProfile>,
+}
+
+/// The subset of a profile that may be overridden per OS.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PlatformProfile {
+    pub network_mode: Option<NetworkMode>,
+    pub filesystem: ProfileFilesystem,
+    pub shell: ProfileShell,
+}
+
+impl Profile {
+    /// Fold the overlay matching the build target into the base fields.
+    ///
+    /// Applied when a profile is loaded, so every consumer downstream sees a
+    /// single flat profile and never has to think about platforms.
+    pub fn flatten_platform(mut self) -> Self {
+        let overlay = if cfg!(target_os = "macos") {
+            self.platform.macos.take()
+        } else {
+            self.platform.linux.take()
+        };
+        self.platform = PlatformProfiles::default();
+
+        let Some(overlay) = overlay else {
+            return self;
+        };
+
+        if overlay.network_mode.is_some() {
+            self.network_mode = overlay.network_mode;
+        }
+        merge_unique(
+            &mut self.filesystem.allow_read,
+            &overlay.filesystem.allow_read,
+        );
+        merge_unique(
+            &mut self.filesystem.deny_read,
+            &overlay.filesystem.deny_read,
+        );
+        merge_unique(
+            &mut self.filesystem.allow_write,
+            &overlay.filesystem.allow_write,
+        );
+        merge_unique(
+            &mut self.filesystem.allow_list_dirs,
+            &overlay.filesystem.allow_list_dirs,
+        );
+        merge_unique(&mut self.shell.pass_env, &overlay.shell.pass_env);
+        merge_unique(&mut self.shell.deny_env, &overlay.shell.deny_env);
+
+        self
+    }
 }
 
 /// Profile filesystem configuration
@@ -158,17 +225,19 @@ impl BuiltinProfile {
             Self::Bun => include_str!("../../profiles/bun.toml"),
             Self::Opencode => include_str!("../../profiles/opencode.toml"),
         };
-        toml::from_str(toml_str).map_err(|e| ProfileError::InvalidBuiltin {
-            name: self.name(),
-            error: e,
-        })
+        toml::from_str::<Profile>(toml_str)
+            .map(Profile::flatten_platform)
+            .map_err(|e| ProfileError::InvalidBuiltin {
+                name: self.name(),
+                error: e,
+            })
     }
 }
 
 /// Load a profile from a TOML file
 pub fn load_profile(path: &Path) -> Result<Profile, ProfileError> {
     let content = std::fs::read_to_string(path)?;
-    Ok(toml::from_str(&content)?)
+    Ok(toml::from_str::<Profile>(&content)?.flatten_platform())
 }
 
 /// Load profiles by name, optionally searching in a custom directory.

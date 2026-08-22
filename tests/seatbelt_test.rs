@@ -174,8 +174,8 @@ fn test_base_profile_integration() {
     let composed = compose_profiles(&[base]);
 
     let expand_path = |p: &str| -> PathBuf {
-        if p.starts_with("~/") {
-            PathBuf::from("/Users/test").join(&p[2..])
+        if let Some(rest) = p.strip_prefix("~/") {
+            PathBuf::from("/Users/test").join(rest)
         } else {
             PathBuf::from(p)
         }

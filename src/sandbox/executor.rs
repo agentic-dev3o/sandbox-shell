@@ -1,5 +1,10 @@
-// sandbox-exec invocation
-use crate::sandbox::seatbelt::{generate_seatbelt_profile, SandboxParams, SeatbeltError};
+//! Sandbox launcher invocation.
+//!
+//! Platform-neutral: process supervision (signal forwarding, process groups,
+//! terminal foreground handling) and environment filtering live here, while the
+//! actual confinement mechanism comes from [`crate::sandbox::backend`].
+use crate::sandbox::backend::{self, PolicyError};
+use crate::sandbox::params::SandboxParams;
 use crate::sandbox::trace::TraceSession;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
@@ -9,7 +14,7 @@ use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
 use std::time::Duration;
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::TempDir;
 
 /// Grace period between SIGTERM and SIGKILL when forwarding shutdown signals
 /// to the sandboxed process group. Long enough for typical cleanup (closing
@@ -33,15 +38,15 @@ pub mod exit_codes {
 pub enum ExecutionError {
     /// IO error during execution
     Io(io::Error),
-    /// Seatbelt profile generation error
-    Seatbelt(SeatbeltError),
+    /// Sandbox policy could not be built
+    Policy(PolicyError),
 }
 
 impl std::fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExecutionError::Io(e) => write!(f, "IO error: {}", e),
-            ExecutionError::Seatbelt(e) => write!(f, "Seatbelt error: {}", e),
+            ExecutionError::Policy(e) => write!(f, "Sandbox policy error: {}", e),
         }
     }
 }
@@ -50,7 +55,7 @@ impl std::error::Error for ExecutionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             ExecutionError::Io(e) => Some(e),
-            ExecutionError::Seatbelt(e) => Some(e),
+            ExecutionError::Policy(e) => Some(e),
         }
     }
 }
@@ -61,9 +66,9 @@ impl From<io::Error> for ExecutionError {
     }
 }
 
-impl From<SeatbeltError> for ExecutionError {
-    fn from(e: SeatbeltError) -> Self {
-        ExecutionError::Seatbelt(e)
+impl From<PolicyError> for ExecutionError {
+    fn from(e: PolicyError) -> Self {
+        ExecutionError::Policy(e)
     }
 }
 
@@ -82,6 +87,43 @@ pub fn execute_sandboxed(
     execute_sandboxed_with_trace(params, command, shell, false, None)
 }
 
+/// Start a violation trace, if this platform can observe them.
+///
+/// macOS exposes sandbox denials to unprivileged users through the unified log.
+/// Linux has no equivalent: Landlock denials are only recorded through the
+/// kernel audit subsystem (Linux 6.15+), which needs `CAP_AUDIT_READ` to read,
+/// so `--trace` reports the limitation instead of silently doing nothing.
+#[cfg(target_os = "macos")]
+fn start_trace(trace: bool, trace_file: Option<&Path>) -> Option<TraceSession> {
+    if !trace && trace_file.is_none() {
+        return None;
+    }
+    if let Some(path) = trace_file {
+        eprintln!(
+            "\x1b[90m[sx:trace]\x1b[0m Writing sandbox violations to {}",
+            path.display()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        TraceSession::start_to_file(path).ok()
+    } else {
+        eprintln!("\x1b[90m[sx:trace]\x1b[0m Starting sandbox violation trace...");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        TraceSession::start().ok()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn start_trace(trace: bool, trace_file: Option<&Path>) -> Option<TraceSession> {
+    if trace || trace_file.is_some() {
+        eprintln!(
+            "\x1b[33m[sx:trace]\x1b[0m Violation tracing is unavailable on Linux: Landlock \
+             denials are only visible through the kernel audit log, which requires privileges. \
+             Use `sx --dry-run` to see the exact policy, or `sx --explain` for the resolved paths."
+        );
+    }
+    None
+}
+
 /// Execute a command inside a sandbox with optional tracing
 pub fn execute_sandboxed_with_trace(
     params: &SandboxParams,
@@ -90,37 +132,21 @@ pub fn execute_sandboxed_with_trace(
     trace: bool,
     trace_file: Option<&Path>,
 ) -> Result<ExecutionResult, ExecutionError> {
-    // Start trace session if requested
-    let mut trace_session = if trace || trace_file.is_some() {
-        if let Some(path) = trace_file {
-            eprintln!(
-                "\x1b[90m[sx:trace]\x1b[0m Writing sandbox violations to {}",
-                path.display()
-            );
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            TraceSession::start_to_file(path).ok()
-        } else {
-            eprintln!("\x1b[90m[sx:trace]\x1b[0m Starting sandbox violation trace...");
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            TraceSession::start().ok()
-        }
-    } else {
-        None
-    };
+    let mut trace_session = start_trace(trace, trace_file);
 
-    // Generate the seatbelt profile
-    let profile_content = generate_seatbelt_profile(params)?;
-
-    // Write profile to temp file
-    let profile_file = NamedTempFile::new()?;
-    fs::write(profile_file.path(), &profile_content)?;
-
-    // Build sandbox-exec command
-    let mut cmd = Command::new("/usr/bin/sandbox-exec");
-    cmd.arg("-f").arg(profile_file.path());
+    // Build the platform sandbox launcher. `launch` owns any policy file and
+    // must outlive the child that reads it.
+    let launch = backend::prepare(params)?;
+    let mut cmd = Command::new(&launch.program);
+    cmd.args(&launch.args);
 
     // Apply environment filtering (clears env, then selectively passes through)
     apply_env_filter(&mut cmd, params);
+
+    // Launcher variables go on after filtering so they are not stripped.
+    for (key, value) in &launch.launcher_env {
+        cmd.env(key, value);
+    }
 
     // Set SANDBOX_MODE environment variable for shell prompt integration
     let mode_str = match params.network_mode {
@@ -136,7 +162,7 @@ pub fn execute_sandboxed_with_trace(
         let shell_path = shell
             .map(String::from)
             .or_else(|| std::env::var("SHELL").ok())
-            .unwrap_or_else(|| "/bin/zsh".to_string());
+            .unwrap_or_else(|| crate::shell::default_shell().to_string());
         cmd.arg(&shell_path);
     } else {
         // Execute the provided command
@@ -204,19 +230,15 @@ pub fn execute_sandboxed_captured(
     params: &SandboxParams,
     command: &[String],
 ) -> Result<(ExitStatus, Vec<u8>, Vec<u8>), ExecutionError> {
-    // Generate the seatbelt profile
-    let profile_content = generate_seatbelt_profile(params)?;
-
-    // Write profile to temp file
-    let profile_file = NamedTempFile::new()?;
-    fs::write(profile_file.path(), &profile_content)?;
-
-    // Build sandbox-exec command
-    let mut cmd = Command::new("/usr/bin/sandbox-exec");
-    cmd.arg("-f").arg(profile_file.path());
+    let launch = backend::prepare(params)?;
+    let mut cmd = Command::new(&launch.program);
+    cmd.args(&launch.args);
 
     // Apply environment filtering
     apply_env_filter(&mut cmd, params);
+    for (key, value) in &launch.launcher_env {
+        cmd.env(key, value);
+    }
 
     cmd.args(command);
 
@@ -225,9 +247,9 @@ pub fn execute_sandboxed_captured(
     Ok((output.status, output.stdout, output.stderr))
 }
 
-/// Print the generated seatbelt profile (dry-run mode)
-pub fn dry_run(params: &SandboxParams) -> Result<String, SeatbeltError> {
-    generate_seatbelt_profile(params)
+/// Render the sandbox policy without executing anything (dry-run mode)
+pub fn dry_run(params: &SandboxParams) -> Result<String, PolicyError> {
+    backend::render_policy(params)
 }
 
 /// RAII guard that SIGKILLs an entire process group on drop.
@@ -389,17 +411,29 @@ fn matches_env_pattern(name: &str, patterns: &[String]) -> bool {
     false
 }
 
+/// Variables the dynamic loader uses to inject code into a process.
+///
+/// These are dropped unconditionally - they are never forwarded and cannot be
+/// re-added through `set_env`. The sandbox launcher is itself a process, so a
+/// preloaded library would run inside it *before* the policy is applied and
+/// could stop the sandbox from being enforced at all. `pass_env` normally
+/// filters them out as an allow-list, but it is empty when a project sets
+/// `inherit_base = false`, which is exactly when this matters.
+fn is_loader_injection_var(key: &str) -> bool {
+    // DYLD_* is the macOS loader, LD_* the glibc/musl one. Both lists are
+    // applied everywhere so behaviour does not depend on the build target.
+    key.starts_with("DYLD_") || key.starts_with("LD_")
+}
+
 /// Apply environment filtering to a Command.
 /// Clears all env, then selectively passes through allowed vars.
 fn apply_env_filter(cmd: &mut Command, params: &SandboxParams) {
-    const DANGEROUS_PREFIXES: &[&str] = &["DYLD_"];
-
     cmd.env_clear();
 
     let parent_env: std::collections::HashMap<String, String> = std::env::vars().collect();
 
     for (key, value) in &parent_env {
-        if DANGEROUS_PREFIXES.iter().any(|p| key.starts_with(p)) {
+        if is_loader_injection_var(key) {
             continue;
         }
         if matches_env_pattern(key, &params.deny_env) {
@@ -411,7 +445,7 @@ fn apply_env_filter(cmd: &mut Command, params: &SandboxParams) {
     }
 
     for (key, value) in &params.set_env {
-        if DANGEROUS_PREFIXES.iter().any(|p| key.starts_with(p)) {
+        if is_loader_injection_var(key) {
             continue;
         }
         if matches_env_pattern(key, &params.deny_env) {
@@ -428,19 +462,31 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_dry_run_returns_profile() {
+    fn test_dry_run_returns_policy() {
         let params = SandboxParams {
             working_dir: PathBuf::from("/tmp/test"),
-            home_dir: PathBuf::from("/Users/test"),
+            home_dir: PathBuf::from("/tmp/home"),
             network_mode: NetworkMode::Offline,
             ..Default::default()
         };
 
-        let profile = dry_run(&params).unwrap();
-        assert!(profile.contains("(version 1)"));
-        assert!(profile.contains("(deny default)"));
+        let policy = dry_run(&params).unwrap();
+
+        #[cfg(target_os = "macos")]
+        {
+            assert!(policy.contains("(version 1)"));
+            assert!(policy.contains("(deny default)"));
+        }
+        #[cfg(target_os = "linux")]
+        {
+            assert!(policy.contains("landlock"));
+            assert!(policy.contains("/tmp/test"));
+        }
     }
 
+    /// A Seatbelt profile is text, so an unescaped quote in a path could inject
+    /// rules and must be rejected before it reaches `sandbox-exec`.
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_dry_run_fails_on_invalid_path() {
         let params = SandboxParams {
@@ -450,6 +496,34 @@ mod tests {
 
         let result = dry_run(&params);
         assert!(result.is_err());
+    }
+
+    /// Landlock takes paths as opaque bytes through open(2) - there is no
+    /// policy text to escape from, so odd characters are simply path bytes.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_dry_run_treats_quotes_as_ordinary_path_bytes() {
+        let params = SandboxParams {
+            working_dir: PathBuf::from("/tmp/test\"injection"),
+            ..Default::default()
+        };
+
+        let policy = dry_run(&params).unwrap();
+        assert!(policy.contains("/tmp/test\"injection"));
+    }
+
+    #[test]
+    fn loader_injection_vars_are_always_dropped() {
+        assert!(is_loader_injection_var("LD_PRELOAD"));
+        assert!(is_loader_injection_var("LD_LIBRARY_PATH"));
+        assert!(is_loader_injection_var("LD_AUDIT"));
+        assert!(is_loader_injection_var("DYLD_INSERT_LIBRARIES"));
+        assert!(is_loader_injection_var("DYLD_LIBRARY_PATH"));
+
+        // Ordinary variables that merely start with the same letters stay.
+        assert!(!is_loader_injection_var("LDFLAGS"));
+        assert!(!is_loader_injection_var("PATH"));
+        assert!(!is_loader_injection_var("HOME"));
     }
 
     #[test]

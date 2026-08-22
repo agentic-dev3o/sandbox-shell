@@ -3,10 +3,10 @@ name = "sx"
 version = "1.0.3"
 edition = "2021"
 authors = ["Pierre Tomasina"]
-description = "Lightweight sandbox for macOS development"
+description = "Lightweight sandbox for macOS and Linux development"
 license = "MIT"
 repository = "https://github.com/agentic-dev3o/sandbox-shell"
-keywords = ["sandbox", "security", "macos", "seatbelt"]
+keywords = ["sandbox", "security", "seatbelt", "landlock"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
@@ -33,6 +33,11 @@ tempfile = "3"
 # Signal handling and syscalls
 signal-hook = "0.4"
 libc = "0.2"
+
+# Linux sandbox backend
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4"
+glob = "0.3"
 
 [dev-dependencies]
 assert_cmd = "2"

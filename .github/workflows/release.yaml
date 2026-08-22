@@ -50,10 +50,14 @@ jobs:
           fi
           echo "Tag v${{ steps.validate.outputs.version }} is available"
 
-  # Test gate: ensure code compiles and tests pass
+  # Test gate: ensure code compiles and tests pass on both sandbox backends
   test:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -169,16 +173,22 @@ jobs:
           git push origin main
           git push origin "v${{ needs.validate.outputs.version }}"
 
-  # Build release binaries for macOS (Intel and Apple Silicon)
+  # Build release binaries for macOS (Intel, Apple Silicon) and Linux (x86_64, arm64)
   build:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
     needs: [validate, prepare]
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -189,6 +199,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      # Cross-link arm64 from the x86_64 runner rather than depending on the
+      # availability of hosted arm64 runners.
+      - name: Install arm64 cross linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
 
       - name: Cache cargo
         uses: actions/cache@v5

@@ -1,5 +1,9 @@
 # Base sandbox profile - minimal security defaults
 # Always included unless explicitly excluded
+#
+# Paths outside [platform.*] apply to every OS. Per-OS additions live in
+# [platform.macos.*] / [platform.linux.*] and are merged into the lists above
+# when the profile is loaded.
 
 network_mode = "offline"
 
@@ -11,26 +15,14 @@ allow_read = [
     "/sbin",
     "/opt",
     "/etc",
-    "/private/etc",
-    "/Library",
-    "/System",
-    "/private/var/db",
-    "/private/var/folders",
-    "/private/var/run",
-    "/var/db",
-    "/var/folders",
-    "/var/run",
     "/tmp",
     # sx config
     "~/.config/sx",
-    # ~/Library - allowlist only safe subdirectories (shift-left)
-    "~/Library/Caches/",
-    "~/Library/Preferences/",
-    "~/Library/Application Support/",
-    "~/Library/Logs/",
-    "~/Library/Frameworks/",
-    "~/Library/Keychains/", # Encrypted, requires Security framework ACL to access secrets
-    "~/Library/Developer/",
+    # Git treats a permission error on its user config as fatal, so
+    # `sx -- git status` needs these. Read-only, and not where git keeps
+    # credentials - ~/.git-credentials stays denied by default.
+    "~/.gitconfig",
+    "~/.config/git",
     # Shell config files (read-only)
     "~/.zshrc",
     "~/.zshenv",
@@ -51,8 +43,6 @@ deny_read = [
 ]
 allow_write = [
     "/tmp",
-    "/private$TMPDIR", # Session-specific temp dir (canonical path)
-    "$TMPDIR", # Session-specific temp dir (symlink path)
 ]
 
 [shell]
@@ -73,4 +63,53 @@ deny_env = [
     "*_SECRET*",
     "*_PASSWORD*",
     "*_KEY",
+]
+
+[platform.macos.filesystem]
+allow_read = [
+    "/private/etc",
+    "/Library",
+    "/System",
+    "/private/var/db",
+    "/private/var/folders",
+    "/private/var/run",
+    "/var/db",
+    "/var/folders",
+    "/var/run",
+    # ~/Library - allowlist only safe subdirectories (shift-left)
+    "~/Library/Caches/",
+    "~/Library/Preferences/",
+    "~/Library/Application Support/",
+    "~/Library/Logs/",
+    "~/Library/Frameworks/",
+    "~/Library/Keychains/", # Encrypted, requires Security framework ACL to access secrets
+    "~/Library/Developer/",
+]
+allow_write = [
+    "/private$TMPDIR", # Session-specific temp dir (canonical path)
+    "$TMPDIR", # Session-specific temp dir (symlink path)
+]
+
+[platform.linux.filesystem]
+allow_read = [
+    # Dynamic loader and shared libraries (usually symlinks into /usr)
+    "/lib",
+    "/lib64",
+    # Kernel interfaces. /proc is needed by most runtimes; docs/SECURITY.md
+    # explains what it exposes and why Landlock alone cannot narrow it.
+    "/proc",
+    "/sys",
+    # DNS: /etc/resolv.conf is a symlink into /run on systemd systems and
+    # Landlock matches on the resolved path.
+    "/run/systemd/resolve",
+    "/var/lib/dbus",
+    "/var/tmp",
+    # XDG cache - parity with ~/Library/Caches on macOS
+    "~/.cache",
+    "~/.terminfo",
+    "/dev/shm",
+]
+allow_write = [
+    "/var/tmp",
+    "/dev/shm",
 ]
