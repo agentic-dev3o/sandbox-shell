@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-09-18
+
+### CI
+
+- Bump the github-actions group across 1 directory with 2 updates (#45)
+
+- Bump actions/cache from 5 to 6 in the github-actions group (#46)
+
+
+### Dependencies
+
+- Bump assert_cmd from 2.2.1 to 2.2.2 in the rust-dependencies group (#43)
+
+- Bump the rust-dependencies group across 1 directory with 7 updates (#52)
+
 ## [1.0.3] - 2026-04-27
 
 ### Bug Fixes
