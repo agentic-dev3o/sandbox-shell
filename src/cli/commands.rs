@@ -80,6 +80,15 @@ pub fn explain(args: &Args) -> Result<()> {
         println!();
     }
 
+    // Denied write paths
+    if !context.params.deny_write.is_empty() {
+        println!("Denied Write Paths:");
+        for path in &context.params.deny_write {
+            println!("  - {}", path.display());
+        }
+        println!();
+    }
+
     // Directory listing only paths
     if !context.params.allow_list_dirs.is_empty() {
         println!("Directory Listing Only (readdir without file access):");
@@ -295,6 +304,7 @@ fn build_sandbox_params(
     let mut allow_read = collect_allow_read_paths(config, profile, &args.allow_read);
     let mut deny_read = collect_deny_read_paths(config, profile, &args.deny_read);
     let mut allow_write = collect_allow_write_paths(config, profile, &args.allow_write);
+    let mut deny_write = collect_deny_write_paths(config, profile, &args.deny_write);
     let mut allow_list_dirs = collect_allow_list_dirs_paths(config, profile);
     let has_configured_list_dirs = !allow_list_dirs.is_empty();
 
@@ -337,6 +347,10 @@ fn build_sandbox_params(
         .into_iter()
         .map(|p| p.to_string_lossy().to_string())
         .collect();
+    deny_write = expand_paths(&deny_write)
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
     allow_list_dirs = expand_paths(&allow_list_dirs)
         .into_iter()
         .map(|p| p.to_string_lossy().to_string())
@@ -361,6 +375,7 @@ fn build_sandbox_params(
         allow_read: allow_read.into_iter().map(PathBuf::from).collect(),
         deny_read: deny_read.into_iter().map(PathBuf::from).collect(),
         allow_write: allow_write.into_iter().map(PathBuf::from).collect(),
+        deny_write: deny_write.into_iter().map(PathBuf::from).collect(),
         allow_list_dirs: allow_list_dirs.into_iter().map(PathBuf::from).collect(),
         raw_rules,
         allow_exec_sugid,
@@ -428,6 +443,15 @@ fn collect_allow_write_paths(config: &Config, profile: &Profile, cli: &[String])
     let mut paths = Vec::new();
     paths.extend(config.filesystem.allow_write.iter().cloned());
     paths.extend(profile.filesystem.allow_write.iter().cloned());
+    paths.extend(cli.iter().cloned());
+    paths
+}
+
+/// Collect deny-write paths from config, profile, and CLI
+fn collect_deny_write_paths(config: &Config, profile: &Profile, cli: &[String]) -> Vec<String> {
+    let mut paths = Vec::new();
+    paths.extend(config.filesystem.deny_write.iter().cloned());
+    paths.extend(profile.filesystem.deny_write.iter().cloned());
     paths.extend(cli.iter().cloned());
     paths
 }
@@ -501,6 +525,9 @@ allow_write = []
 
 # Paths to deny even if globally allowed
 deny_read = []
+
+# Paths to deny even if globally allowed
+deny_write = []
 
 # Directories to allow listing (readdir) but not file access inside.
 # Useful for runtimes like Bun that scan parent directories.

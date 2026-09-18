@@ -80,6 +80,7 @@ pub struct ProfileFilesystem {
     pub allow_read: Vec<String>,
     pub deny_read: Vec<String>,
     pub allow_write: Vec<String>,
+    pub deny_write: Vec<String>,
     /// Paths to allow directory listing only (readdir), not file contents
     pub allow_list_dirs: Vec<String>,
 }
@@ -231,6 +232,10 @@ pub fn compose_profiles(profiles: &[Profile]) -> Profile {
         merge_unique(
             &mut result.filesystem.allow_write,
             &profile.filesystem.allow_write,
+        );
+        merge_unique(
+            &mut result.filesystem.deny_write,
+            &profile.filesystem.deny_write,
         );
         merge_unique(
             &mut result.filesystem.allow_list_dirs,

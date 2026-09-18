@@ -27,7 +27,7 @@ fi
 _sx_completions() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local profiles="base online localhost rust bun claude gpg"
-    local options="--help --version --verbose --debug --trace --trace-file --dry-run --config --no-config --explain --init --offline --online --localhost --allow-read --allow-write --deny-read"
+    local options="--help --version --verbose --debug --trace --trace-file --dry-run --config --no-config --explain --init --offline --online --localhost --allow-read --allow-write --deny-read --deny-write"
 
     if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "$options" -- "$cur"))

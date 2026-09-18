@@ -46,6 +46,7 @@ complete -c sx -l localhost -d 'Allow localhost only'
 complete -c sx -l allow-read -d 'Allow read access to path'
 complete -c sx -l allow-write -d 'Allow write access to path'
 complete -c sx -l deny-read -d 'Deny read access to path'
+complete -c sx -l deny-write -d 'Deny write access to path'
 
 # Profile completions
 complete -c sx -a 'base' -d 'Minimal sandbox'

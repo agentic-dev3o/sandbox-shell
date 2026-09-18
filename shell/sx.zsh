@@ -52,6 +52,7 @@ _sx() {
         '*--allow-read=[Allow read access]:path:_files' \
         '*--allow-write=[Allow write access]:path:_files' \
         '*--deny-read=[Deny read access]:path:_files' \
+        '*--deny-write=[Deny write access]:path:_files' \
         '*:: :->args'
 
     case $state in

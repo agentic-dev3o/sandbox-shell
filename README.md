@@ -184,6 +184,7 @@ sx --dry-run rust               # Preview seatbelt profile
 | `--allow-read <PATH>` | Allow read |
 | `--allow-write <PATH>` | Allow write |
 | `--deny-read <PATH>` | Deny read (overrides allows) |
+| `--deny-write <PATH>` | Deny write (overrides allows) |
 
 | `--trace` shows violations from *all* sandboxed processes on the system, not just yours. macOS limitation.
 

@@ -67,6 +67,7 @@ fn merge_filesystem(global: &FilesystemConfig, project: &FilesystemConfig) -> Fi
     FilesystemConfig {
         allow_read: merge_unique_strings(&global.allow_read, &project.allow_read),
         deny_read: merge_unique_strings(&global.deny_read, &project.deny_read),
+        deny_write: merge_unique_strings(&global.deny_write, &project.deny_write),
         allow_write: merge_unique_strings(&global.allow_write, &project.allow_write),
         allow_list_dirs: merge_unique_strings(&global.allow_list_dirs, &project.allow_list_dirs),
     }
